@@ -1,0 +1,42 @@
+{
+  "name": "node-package-template",
+  "version": "0.0.1",
+  "description": "Template for creating a NodeJs package",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.mjs"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.mjs"
+      }
+    }
+  },
+  "scripts": {
+    "clean": "pnpm run gulp clean",
+    "build": "pnpm run gulp build",
+    "buildCi": "pnpm run gulp buildCi",
+    "test": "pnpm run gulp test",
+    "gulp": "pnpm --package=@iiimaddiniii/js-build-tool@0.4.1 dlx js-build-tool"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/IIIMADDINIII/node-package-template"
+  },
+  "author": "IIIMADDINIII <martin@elend.name>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/IIIMADDINIII/node-package-template/issues"
+  },
+  "homepage": "https://github.com/IIIMADDINIII/node-package-template#readme",
+  "devDependencies": {
+    "@types/node": "^20.8.9",
+    "ava": "^5.3.1",
+    "@iiimaddiniii/js-build-tool": "^0.4.1"
+  },
+  "dependencies": {
+    "tslib": "^2.6.2"
+  }
+}
