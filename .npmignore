@@ -2,8 +2,12 @@
 /.vscode/
 /node_modules/
 /patches/
+/tests/
 /pnpm-lock.yaml
 /rollup.config.mjs
 /switches.d.ts
 /tsconfig.json
-/tsconfig.tsbuildinfo
+/tsconfig.*.json
+/*.tsbuildinfo
+/jest.config.mjs
+/gulpfile.mjs

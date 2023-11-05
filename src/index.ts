@@ -1,10 +1,12 @@
-// Reference Switches so that the const:production and const:development packages are defined
-/// <reference types="@iiimaddiniii/js-build-tool/switches" />
+import type { MessageHandlerInterface } from "./Interfaces.js";
+import { ObjectStore, ObjectStoreOptions } from "./ObjectStore.js";
+import { RequestHandler, RequestHandlerOptions } from "./RequestHandler.js";
 
-import prod from "consts:production";
 
-prod;
+interface CreateObjectStoreOptions<ExtraTransferable> extends MessageHandlerInterface<ExtraTransferable>, RequestHandlerOptions, ObjectStoreOptions { }
 
-export function helloWorld(): string {
-  return "Hello World!";
+export function createObjectStore<ExtraTransferable>(options: CreateObjectStoreOptions<ExtraTransferable>): ObjectStore<ExtraTransferable> {
+  let requestHandler = new RequestHandler(options, options);
+  let objectStore = new ObjectStore(requestHandler, options);
+  return objectStore;
 }
