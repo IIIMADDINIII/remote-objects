@@ -1,6 +1,6 @@
 import type { MessageHandlerInterface } from "./Interfaces.js";
-import { ObjectStore, ObjectStoreOptions } from "./ObjectStore.js";
-import { RequestHandler, RequestHandlerOptions } from "./RequestHandler.js";
+import { ObjectStore, type ObjectStoreOptions } from "./ObjectStore.js";
+import { RequestHandler, type RequestHandlerOptions } from "./RequestHandler.js";
 
 
 interface CreateObjectStoreOptions<ExtraTransferable> extends MessageHandlerInterface<ExtraTransferable>, RequestHandlerOptions, ObjectStoreOptions { }

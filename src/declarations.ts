@@ -11,4 +11,4 @@ declare global {
   function setTimeout(handler: TimerHandler, timeout?: number, ...arguments: any[]): number;
 }
 
-export default {};
+export default void 0;

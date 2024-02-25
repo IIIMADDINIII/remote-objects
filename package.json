@@ -1,16 +1,16 @@
 {
-  "name": "node-package-template",
+  "name": "remote-objects",
   "version": "0.0.1",
   "description": "Template for creating a NodeJs package",
   "exports": {
     ".": {
       "import": {
         "types": "./dist/esm/index.d.ts",
-        "default": "./dist/esm/index.mjs"
+        "default": "./dist/esm/index.js"
       },
       "require": {
         "types": "./dist/cjs/index.d.ts",
-        "default": "./dist/cjs/index.mjs"
+        "default": "./dist/cjs/index.js"
       }
     }
   },
@@ -19,7 +19,7 @@
     "build": "pnpm run gulp build",
     "buildCi": "pnpm run gulp buildCi",
     "test": "pnpm run gulp test",
-    "gulp": "pnpm --package=@iiimaddiniii/js-build-tool@0.5.3 dlx js-build-tool"
+    "gulp": "pnpm --package=@iiimaddiniii/js-build-tool@0.6.10 dlx js-build-tool"
   },
   "repository": {
     "type": "git",
@@ -32,9 +32,10 @@
   },
   "homepage": "https://github.com/IIIMADDINIII/node-package-template#readme",
   "devDependencies": {
-    "@types/js-build-tool-types": "npm:@iiimaddiniii/js-build-tool-types@^0.4.1",
     "@jest/globals": "^29.7.0",
-    "jest": "^29.7.0"
+    "@types/js-build-tool-types": "npm:@iiimaddiniii/js-build-tool-types@^0.6.6",
+    "jest": "^29.7.0",
+    "typed-emitter": "^2.1.0"
   },
   "dependencies": {
     "tslib": "^2.6.2"

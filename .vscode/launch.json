@@ -21,6 +21,9 @@
         "--runTestsByPath",
         "${jest.testFile}"
       ],
+      "runtimeArgs": [
+        "--experimental-vm-modules"
+      ],
       "outputCapture": "std",
       "console": "internalConsole",
       "internalConsoleOptions": "openOnSessionStart",
