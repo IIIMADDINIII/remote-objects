@@ -23,14 +23,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/IIIMADDINIII/node-package-template"
+    "url": "git+https://github.com/IIIMADDINIII/remote-objects"
   },
   "author": "IIIMADDINIII <martin@elend.name>",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/IIIMADDINIII/node-package-template/issues"
+    "url": "https://github.com/IIIMADDINIII/remote-objects/issues"
   },
-  "homepage": "https://github.com/IIIMADDINIII/node-package-template#readme",
+  "homepage": "https://github.com/IIIMADDINIII/remote-objects#readme",
   "devDependencies": {
     "@jest/globals": "^29.7.0",
     "@types/js-build-tool-types": "npm:@iiimaddiniii/js-build-tool-types@^0.6.6",

@@ -1,11 +1,9 @@
 /.rollup.cache/
 /.vscode/
-/node_modules/
 /patches/
+/node_modules/
 /tests/
 /pnpm-lock.yaml
-/rollup.config.mjs
-/switches.d.ts
 /tsconfig.json
 /tsconfig.*.json
 /*.tsbuildinfo
