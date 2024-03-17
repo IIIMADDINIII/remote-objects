@@ -4,7 +4,7 @@
 
 
 
-type Primitives = string | number | boolean | null | undefined | void;
+type Primitives = string | number | boolean | null | undefined | void | bigint | symbol;
 
 type RemotePrimitive<T extends Primitives> = PromiseLike<T> & {
   set(value: T): PromiseLike<void>;
@@ -28,78 +28,154 @@ type RemoteFunction<T extends (...args: any[]) => any> =
   never;
 
 export type Remote<T> =
-  T extends symbol ? never :
-  T extends bigint ? never :
   T extends (...args: any[]) => any ? RemoteFunction<T> :
   T extends Primitives ? RemotePrimitive<T> :
   T extends {} ? RemoteObject<T> :
   never;
 
 
-type ObjectId = number;
 
-type AwaitPathProperty = { type: "prop", name: string; };
-type AwaitPathCall = { type: "call", name: string; args: unknown[]; };
-type AwaitPathSegment = AwaitPathProperty | AwaitPathCall;
-type AwaitPath = AwaitPathSegment[];
-
-export type RequestFunction = (rootObject: ObjectId, awaitPath: AwaitPath) => Promise<unknown>;
-
-type ProxyInterface = {
-  rootObject: ObjectId;
-  awaitPath: AwaitPath;
+export type RequestFunction = (proxy: RemoteProxyData) => Promise<unknown>;
+export type RemoteObjectDescription = {
+  isFunction: boolean;
+  ownKeys: (string | symbol)[];
+  hasKeys: (string | symbol)[];
+  prototype: {} | null;
+};
+export type RemoteObjectData = RemoteObjectDescription & {
   request: RequestFunction;
 };
 
+export type GetPathSegment = { type: "get", name: string | symbol; };
+export type SetPathSegment = { type: "set", name: string | symbol; value: unknown; };
+export type CallPathSegment = { type: "call", args: unknown[]; thisArg: unknown; };
+export type NewPathSegment = { type: "new", args: unknown[]; };
+export type PathSegment = GetPathSegment | SetPathSegment | CallPathSegment | NewPathSegment;
+export type ProxyPath = PathSegment[];
+export type RemoteProxyData = {
+  root: RemoteObjectData;
+  path: ProxyPath;
+};
 
-export function createProxy<T>(param: ProxyInterface): Remote<T> {
-  return <Remote<T>>new Proxy(<Remote<T>>function () { }, {
-    get(_target: unknown, property: string | symbol, _receiver: unknown) {
-      if (property === "then") return (onfulfilled: () => void, onrejected: () => void) => {
-        param.request(param.rootObject, param.awaitPath).then(onfulfilled, onrejected);
-      };
-      if (typeof property === "symbol") throw new TypeError("symbol key is currently not Supported by RemoteObject");
-      return createProxy({ ...param, awaitPath: [...param.awaitPath, { type: "prop", name: property }] });
-    },
-    // ToDo: Implement Logic to create a call Chain
-    apply(_target: unknown, _thisArg: unknown, _argArray: unknown[]) {
-      return undefined;
-    },
-    // Handlers wich currently are not supported
-    construct(_target: unknown, _argArray: unknown[], _newTarget: Function) {
-      throw new TypeError("construct is currently not Supported by RemoteObject");
-    },
-    getPrototypeOf(_target: unknown) {
-      throw new TypeError("getPrototypeOf is currently not Supported by RemoteObject");
-    },
-    has(_target: unknown, _property: string | symbol) {
-      throw new TypeError("has is currently not Supported by RemoteObject");
-    },
-    ownKeys(_target: unknown) {
-      throw new TypeError("ownKeys is currently not Supported by RemoteObject");
-    },
-    // Handlers wich will properly never be supported
-    defineProperty(_target: unknown, _property: string | symbol, _attributes: PropertyDescriptor) {
-      return false;
-    },
-    deleteProperty(_target: unknown, _property: string | symbol) {
-      return false;
-    },
-    getOwnPropertyDescriptor(_target: unknown, _property: string | symbol) {
-      throw new TypeError("getOwnPropertyDescriptor is currently not Supported by RemoteObject");
-    },
-    isExtensible(_target: unknown) {
-      throw new TypeError("isExtensible is not Supported by RemoteObject");
-    },
-    preventExtensions(_target: unknown) {
-      return false;
-    },
-    set(_target: unknown, _property: string | symbol, _newValue: unknown, _receiver: unknown): boolean {
-      return false;
-    },
-    setPrototypeOf(_target: unknown, _prototype: object | null): boolean {
-      return false;
-    },
-  });
+export const SymbolProxyData: unique symbol = Symbol();
+
+function appendProxyPath(data: RemoteProxyData, segment: PathSegment): RemoteProxyData {
+  return {
+    root: data.root,
+    path: [...data.path, segment],
+  };
 }
 
+function makeProxyHandlers<T>(data: RemoteProxyData, additionalHandlers: ProxyHandler<Remote<T>> = {}): ProxyHandler<Remote<T>> {
+  const handler: ProxyHandler<Remote<T>> = {
+    get(_target: unknown, name: string | symbol, _receiver: unknown) {
+      if (name === SymbolProxyData) return data;
+      if (name === "then") return data.root.request(data).then;
+      if (name === "set") return (value: unknown) => data.root.request(appendProxyPath(data, { type: "set", name, value }));
+      return createRemoteProxy(appendProxyPath(data, { type: "get", name }));
+    },
+    apply(_target: unknown, thisArg: unknown, args: unknown[]) {
+      return createRemoteProxy(appendProxyPath(data, { type: "call", args, thisArg }));
+    },
+    construct(_target: unknown, args: unknown[], _newTarget: unknown) {
+      return createRemoteProxy(appendProxyPath(data, { type: "new", args }));
+    },
+    ...additionalHandlers
+  };
+  Object.setPrototypeOf(handler, UnsupportedHandlers);
+  return handler;
+}
+
+function createRemoteProxy<T>(data: RemoteProxyData): Remote<T> {
+  return <Remote<T>>new Proxy(new Function(), makeProxyHandlers(data));
+}
+
+/**
+ * Creates a Object with Proxies wich tries to mimic the described Object.
+ * reading, writing, calling and constructing is Supported at any level.
+ * has, ownKeys and getPrototypeOf is only supported at top level.
+ * @param description - description of the Object to mimic generated by getDescription.
+ * @returns a Proxy Object.
+ */
+export function createRemoteObject<T>(description: RemoteObjectDescription, request: RequestFunction): Remote<T> {
+  const data: RemoteProxyData = { root: { ...description, request }, path: [] };
+  return <Remote<T>>new Proxy(new Function(), makeProxyHandlers(data, {
+    getPrototypeOf(_target: unknown) {
+      return data.root.prototype;
+    },
+    has(_target: unknown, property: string | symbol) {
+      if (data.root.ownKeys.includes(property)) return true;
+      if (data.root.hasKeys.includes(property)) return true;
+      if (data.root.prototype === null) return false;
+      return property in data.root.prototype;
+    },
+    ownKeys(_target: unknown) {
+      return [...data.root.ownKeys];
+    },
+  }));
+}
+
+function getAllKeys(object: {}): (string | symbol)[] {
+  const ret: Set<string | symbol> = new Set();
+  let o: {} | null = object;
+  while (o !== null) {
+    for (const key of Reflect.ownKeys(o)) {
+      ret.add(key);
+    }
+    o = Reflect.getPrototypeOf(o);
+  }
+  return [...ret.values()];
+}
+
+export type ObjectDescriptionPrototype = "none" | "keysOnly" | "full";
+export function getObjectDescription(object: {}, prototype: ObjectDescriptionPrototype = "none"): RemoteObjectDescription {
+  return {
+    isFunction: typeof object === "function",
+    ownKeys: Reflect.ownKeys(object),
+    hasKeys: prototype === "keysOnly" ? getAllKeys(object) : [],
+    prototype: prototype === "full" ? Reflect.getPrototypeOf(object) : null,
+  };
+}
+
+// Base Definition for unsupported Handlers
+const UnsupportedHandlers = {
+  get(_target: unknown, _name: string | symbol, _receiver: unknown) {
+    throw new TypeError("get is currently not Supported by RemoteObject");
+  },
+  apply(_target: unknown, _thisArg: unknown, _args: unknown[]) {
+    throw new TypeError("apply is currently not Supported by RemoteObject");
+  },
+  construct(_target: unknown, _argArray: unknown[], _newTarget: Function) {
+    throw new TypeError("construct is currently not Supported by RemoteObject");
+  },
+  getPrototypeOf(_target: unknown) {
+    throw new TypeError("getPrototypeOf is currently not Supported by RemoteObject");
+  },
+  has(_target: unknown, _property: string | symbol) {
+    throw new TypeError("has is currently not Supported by RemoteObject");
+  },
+  ownKeys(_target: unknown) {
+    throw new TypeError("ownKeys is currently not Supported by RemoteObject");
+  },
+  defineProperty(_target: unknown, _property: string | symbol, _attributes: PropertyDescriptor) {
+    return false;
+  },
+  deleteProperty(_target: unknown, _property: string | symbol) {
+    return false;
+  },
+  getOwnPropertyDescriptor(_target: unknown, _property: string | symbol) {
+    throw new TypeError("getOwnPropertyDescriptor is currently not Supported by RemoteObject");
+  },
+  isExtensible(_target: unknown) {
+    throw new TypeError("isExtensible is not Supported by RemoteObject");
+  },
+  preventExtensions(_target: unknown) {
+    return false;
+  },
+  set(_target: unknown, _property: string | symbol, _newValue: unknown, _receiver: unknown): boolean {
+    return false;
+  },
+  setPrototypeOf(_target: unknown, _prototype: object | null): boolean {
+    return false;
+  },
+};

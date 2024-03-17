@@ -1,5 +1,5 @@
 import { describe, expect, jest, test } from '@jest/globals';
-import { createProxy, type RequestFunction } from "./RemoteObject.js";
+import { createRemoteObject, type RequestFunction } from "./RemoteObject.js";
 
 
 
@@ -7,32 +7,56 @@ import { createProxy, type RequestFunction } from "./RemoteObject.js";
 /* istanbul ignore next */
 describe('RemoteObject.ts', () => {
 
-  function getObject(cb?: RequestFunction) {
-    return createProxy<{ test?: string; }>({
-      rootObject: 10,
-      awaitPath: [],
-      async request(rootObject, awaitPath) {
-        if (!cb) return;
-        return await cb(rootObject, awaitPath);
-      },
+  describe("isProxy", () => {
+    test("should return true on a Proxy", () => {
+      const t = getObject();
+      expect(isProxy(t)).toBe(true);
     });
-  }
+    test("should return false on anything but a Proxy", () => {
+      expect(isProxy(true)).toBe(false);
+      expect(isProxy(null)).toBe(false);
+      expect(isProxy(undefined)).toBe(false);
+      expect(isProxy({})).toBe(false);
+      expect(isProxy(10)).toBe(false);
+      expect(isProxy("test")).toBe(false);
+      expect(isProxy(new Proxy({}, {}))).toBe(false);
+      expect(isProxy(() => { })).toBe(false);
+    });
+  });
 
-  describe('createProxy', () => {
+  describe('createRemoteObject', () => {
     test("awaiting should invoke request Function", async () => {
       const fn = jest.fn<RequestFunction>();
-      const t = getObject(fn);
+      const t = createRemoteObject(fn);
       await t;
       expect(fn).toBeCalledTimes(1);
       expect(fn).nthCalledWith(1, 10, []);
     });
 
+
+
+
+    test("awaiting should invoke request Function", async () => {
+      const fn = jest.fn<RequestFunction>();
+      const t = createRemoteObject(fn);
+      await t;
+      expect(fn).toBeCalledTimes(1);
+      expect(fn).nthCalledWith(1, 10, []);
+    });
     test("awaiting key should invoke request Function", async () => {
       const fn = jest.fn<RequestFunction>();
       const t = getObject(fn);
       await t.test;
       expect(fn).toBeCalledTimes(1);
       expect(fn).nthCalledWith(1, 10, [{ type: "prop", name: "test" }]);
+    });
+    test("awaiting call should invoke request Function", async () => {
+      const fn = jest.fn<RequestFunction>();
+      const t = getObject(fn);
+      //@ts-ignore
+      await t(15, "test");
+      expect(fn).toBeCalledTimes(1);
+      expect(fn).nthCalledWith(1, 10, [{ type: "call", args: [15, "test"] }]);
     });
 
     test("symbol key should fail", () => {
