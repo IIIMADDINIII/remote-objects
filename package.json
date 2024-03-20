@@ -19,7 +19,7 @@
     "build": "pnpm run gulp build",
     "buildCi": "pnpm run gulp buildCi",
     "test": "pnpm run gulp test",
-    "gulp": "pnpm --package=@iiimaddiniii/js-build-tool@0.6.34 dlx js-build-tool"
+    "gulp": "pnpm --package=@iiimaddiniii/js-build-tool@0.7.0 dlx js-build-tool"
   },
   "repository": {
     "type": "git",
@@ -33,7 +33,7 @@
   "homepage": "https://github.com/IIIMADDINIII/remote-objects#readme",
   "devDependencies": {
     "@jest/globals": "^29.7.0",
-    "@types/js-build-tool-types": "npm:@iiimaddiniii/js-build-tool-types@^0.6.33",
+    "@types/js-build-tool-types": "npm:@iiimaddiniii/js-build-tool-types@^0.7.0",
     "jest": "^29.7.0",
     "typed-emitter": "^2.1.0"
   },

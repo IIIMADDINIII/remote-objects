@@ -48,7 +48,7 @@ export type RemoteObjectData = RemoteObjectDescription & {
 
 export type GetPathSegment = { type: "get", name: string | symbol; };
 export type SetPathSegment = { type: "set", name: string | symbol; value: unknown; };
-export type CallPathSegment = { type: "call", args: unknown[]; thisArg: unknown; };
+export type CallPathSegment = { type: "call", args: unknown[]; };
 export type NewPathSegment = { type: "new", args: unknown[]; };
 export type PathSegment = GetPathSegment | SetPathSegment | CallPathSegment | NewPathSegment;
 export type ProxyPath = PathSegment[];
@@ -70,12 +70,14 @@ function makeProxyHandlers<T>(data: RemoteProxyData, additionalHandlers: ProxyHa
   const handler: ProxyHandler<Remote<T>> = {
     get(_target: unknown, name: string | symbol, _receiver: unknown) {
       if (name === SymbolProxyData) return data;
-      if (name === "then") return data.root.request(data).then;
+      if (name === "then") return (onfulfilled: () => unknown, onrejected: () => unknown) => {
+        data.root.request(data).then(onfulfilled, onrejected);
+      };
       if (name === "set") return (value: unknown) => data.root.request(appendProxyPath(data, { type: "set", name, value }));
       return createRemoteProxy(appendProxyPath(data, { type: "get", name }));
     },
-    apply(_target: unknown, thisArg: unknown, args: unknown[]) {
-      return createRemoteProxy(appendProxyPath(data, { type: "call", args, thisArg }));
+    apply(_target: unknown, _thisArg: unknown, args: unknown[]) {
+      return createRemoteProxy(appendProxyPath(data, { type: "call", args }));
     },
     construct(_target: unknown, args: unknown[], _newTarget: unknown) {
       return createRemoteProxy(appendProxyPath(data, { type: "new", args }));
@@ -99,7 +101,7 @@ function createRemoteProxy<T>(data: RemoteProxyData): Remote<T> {
  */
 export function createRemoteObject<T>(description: RemoteObjectDescription, request: RequestFunction): Remote<T> {
   const data: RemoteProxyData = { root: { ...description, request }, path: [] };
-  return <Remote<T>>new Proxy(new Function(), makeProxyHandlers(data, {
+  return <Remote<T>>new Proxy(data.root.isFunction ? new Function() : {}, makeProxyHandlers(data, {
     getPrototypeOf(_target: unknown) {
       return data.root.prototype;
     },
@@ -128,7 +130,7 @@ function getAllKeys(object: {}): (string | symbol)[] {
 }
 
 export type ObjectDescriptionPrototype = "none" | "keysOnly" | "full";
-export function getObjectDescription(object: {}, prototype: ObjectDescriptionPrototype = "none"): RemoteObjectDescription {
+export function getObjectDescription(object: {}, prototype: ObjectDescriptionPrototype = "full"): RemoteObjectDescription {
   return {
     isFunction: typeof object === "function",
     ownKeys: Reflect.ownKeys(object),

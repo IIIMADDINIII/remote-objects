@@ -1,114 +1,137 @@
 import { describe, expect, jest, test } from '@jest/globals';
-import { createRemoteObject, type RequestFunction } from "./RemoteObject.js";
+import { createRemoteObject, getObjectDescription, type RequestFunction } from "./RemoteObject.js";
 
 
 
 
 /* istanbul ignore next */
 describe('RemoteObject.ts', () => {
-
-  describe("isProxy", () => {
-    test("should return true on a Proxy", () => {
-      const t = getObject();
-      expect(isProxy(t)).toBe(true);
+  describe('getObjectDescription', () => {
+    test("should describe a function", () => {
+      const fn = () => { };
+      const od = getObjectDescription(fn);
+      expect(od.isFunction).toEqual(true);
+      expect(od.hasKeys).toEqual([]);
+      expect(od.ownKeys).toEqual(["length", "name"]);
+      expect(od.prototype).toEqual(Object.getPrototypeOf(fn));
     });
-    test("should return false on anything but a Proxy", () => {
-      expect(isProxy(true)).toBe(false);
-      expect(isProxy(null)).toBe(false);
-      expect(isProxy(undefined)).toBe(false);
-      expect(isProxy({})).toBe(false);
-      expect(isProxy(10)).toBe(false);
-      expect(isProxy("test")).toBe(false);
-      expect(isProxy(new Proxy({}, {}))).toBe(false);
-      expect(isProxy(() => { })).toBe(false);
+    test("should describe a object", () => {
+      const o = { test: "test" };
+      const od = getObjectDescription(o);
+      expect(od.isFunction).toEqual(false);
+      expect(od.hasKeys).toEqual([]);
+      expect(od.ownKeys).toEqual(["test"]);
+      expect(od.prototype).toEqual(Object.getPrototypeOf(o));
+    });
+    test("option none should have no hasKeys and prototype", () => {
+      const o = { test: "test" };
+      const od = getObjectDescription(o, "none");
+      expect(od.isFunction).toEqual(false);
+      expect(od.hasKeys).toEqual([]);
+      expect(od.ownKeys).toEqual(["test"]);
+      expect(od.prototype).toEqual(null);
+    });
+    test("option keysOnly should have hasKeys and no prototype", () => {
+      const base = { a: "base" };
+      const o = { test: "test" };
+      Object.setPrototypeOf(o, base);
+      const od = getObjectDescription(o, "keysOnly");
+      expect(od.isFunction).toEqual(false);
+      for (const key of [...od.hasKeys, "", "test2", "___"]) {
+        expect(od.hasKeys.includes(key)).toEqual(key in o);
+      }
+      expect(od.ownKeys).toEqual(["test"]);
+      expect(od.prototype).toEqual(null);
     });
   });
 
   describe('createRemoteObject', () => {
-    test("awaiting should invoke request Function", async () => {
-      const fn = jest.fn<RequestFunction>();
-      const t = createRemoteObject(fn);
-      await t;
+    test("typeof function should be function", async () => {
+      const ro = createRemoteObject<() => void>(getObjectDescription(() => { }), async () => { });
+      expect(typeof ro).toBe("function");
+    });
+    test("typeof object should be object", async () => {
+      const ro = createRemoteObject<() => void>(getObjectDescription({}), async () => { });
+      expect(typeof ro).toBe("object");
+    });
+    test("prototype should not be null", () => {
+      const base = { a: "test" };
+      const o = { test: "test" };
+      Object.setPrototypeOf(o, base);
+      const ro = createRemoteObject<() => void>(getObjectDescription(o), async () => { });
+      expect(Object.getPrototypeOf(ro)).toBe(base);
+    });
+    test("prototype should be null if description does not include one", () => {
+      const base = { a: "test" };
+      const o = { test: "test" };
+      Object.setPrototypeOf(o, base);
+      const ro = createRemoteObject<() => void>(getObjectDescription(o, "keysOnly"), async () => { });
+      expect(Object.getPrototypeOf(ro)).toBe(null);
+    });
+    test("own keys should reflect keys", () => {
+      const ro = createRemoteObject<() => void>(getObjectDescription({ test: "test" }), async () => { });
+      expect(Reflect.ownKeys(ro)).toEqual(["test"]);
+    });
+    test("with option none only own keys should return true", () => {
+      const base = { a: "test" };
+      const o = { test: "test" };
+      Object.setPrototypeOf(o, base);
+      const ro = createRemoteObject<() => void>(getObjectDescription(o, "none"), async () => { });
+      expect("test" in ro).toEqual(true);
+      expect("a" in ro).toEqual(false);
+    });
+    test("with option keysOnly only own keys and parents keys should return true", () => {
+      const base = { a: "test" };
+      const o = { test: "test" };
+      Object.setPrototypeOf(o, base);
+      const ro = createRemoteObject<() => void>(getObjectDescription(o, "keysOnly"), async () => { });
+      expect("test" in ro).toEqual(true);
+      expect("a" in ro).toEqual(true);
+    });
+    test("with option full only own keys and parents keys should return true", () => {
+      const base = { a: "test" };
+      const o = { test: "test" };
+      Object.setPrototypeOf(o, base);
+      const ro = createRemoteObject<() => void>(getObjectDescription(o, "full"), async () => { });
+      expect("test" in ro).toEqual(true);
+      expect("a" in ro).toEqual(true);
+    });
+    // Testing request Handler Calls
+    test("awaiting object should invoke Request Handler", async () => {
+      const fn = jest.fn<RequestFunction>(async () => { });
+      const o = { test: "test" };
+      const ro = createRemoteObject<typeof o>(getObjectDescription(o), fn);
+      await ro;
       expect(fn).toBeCalledTimes(1);
-      expect(fn).nthCalledWith(1, 10, []);
+      expect(fn).nthCalledWith(1, { root: expect.anything(), path: [] });
     });
-
-
-
-
-    test("awaiting should invoke request Function", async () => {
-      const fn = jest.fn<RequestFunction>();
-      const t = createRemoteObject(fn);
-      await t;
+    test("awaiting object key should invoke Request Handler with path", async () => {
+      const fn = jest.fn<RequestFunction>(async () => { });
+      const o = { test: "test" };
+      const ro = createRemoteObject<typeof o>(getObjectDescription(o), fn);
+      await ro.test;
       expect(fn).toBeCalledTimes(1);
-      expect(fn).nthCalledWith(1, 10, []);
+      expect(fn).nthCalledWith(1, { root: expect.anything(), path: [{ type: "get", name: "test" }] });
     });
-    test("awaiting key should invoke request Function", async () => {
-      const fn = jest.fn<RequestFunction>();
-      const t = getObject(fn);
-      await t.test;
+    test("awaiting function call should invoke Request Handler with path", async () => {
+      const fn = jest.fn<RequestFunction>(async () => { });
+      const o = {
+        test(_a: number) { return "test"; }
+      };
+      const ro = createRemoteObject<typeof o>(getObjectDescription(o), fn);
+      await ro.test(10);
       expect(fn).toBeCalledTimes(1);
-      expect(fn).nthCalledWith(1, 10, [{ type: "prop", name: "test" }]);
+      expect(fn).nthCalledWith(1, { root: expect.anything(), path: [{ type: "get", name: "test" }, { type: "call", args: [10] }] });
     });
-    test("awaiting call should invoke request Function", async () => {
-      const fn = jest.fn<RequestFunction>();
-      const t = getObject(fn);
-      //@ts-ignore
-      await t(15, "test");
+    test("awaiting construction call should invoke Request Handler with path", async () => {
+      const fn = jest.fn<RequestFunction>(async () => { });
+      const o = {
+        test: class { }
+      };
+      const ro = createRemoteObject<typeof o>(getObjectDescription(o), fn);
+      await new ro.test(10);
       expect(fn).toBeCalledTimes(1);
-      expect(fn).nthCalledWith(1, 10, [{ type: "call", args: [15, "test"] }]);
-    });
-
-    test("symbol key should fail", () => {
-      const t = getObject();
-      //@ts-ignore
-      expect(() => t[Symbol()]).toThrow("symbol key is currently not Supported by RemoteObject");
-    });
-    test("construct should fail", () => {
-      const t = getObject();
-      //@ts-ignore
-      expect(() => new t()).toThrow("construct is currently not Supported by RemoteObject");
-    });
-    test("getPrototypeOf should fail", () => {
-      const t = getObject();
-      expect(() => Object.getPrototypeOf(t)).toThrow("getPrototypeOf is currently not Supported by RemoteObject");
-    });
-    test("has should fail", () => {
-      const t = getObject();
-      expect(() => "test" in t).toThrow("has is currently not Supported by RemoteObject");
-    });
-    test("ownKeys should fail", () => {
-      const t = getObject();
-      expect(() => Object.getOwnPropertyNames(t)).toThrow("ownKeys is currently not Supported by RemoteObject");
-    });
-    test("defineProperty should fail", () => {
-      const t = getObject();
-      expect(() => Object.defineProperty(t, "test", { value: "test" })).toThrow("'defineProperty' on proxy: trap returned falsish for property 'test'");
-    });
-    test("deleteProperty should fail", () => {
-      const t = getObject();
-      expect(() => delete t.test).toThrow("'deleteProperty' on proxy: trap returned falsish for property 'test'");
-    });
-    test("getOwnPropertyDescriptor should fail", () => {
-      const t = getObject();
-      expect(() => Object.getOwnPropertyDescriptor(t, "test")).toThrow("getOwnPropertyDescriptor is currently not Supported by RemoteObject");
-    });
-    test("isExtensible should fail", () => {
-      const t = getObject();
-      expect(() => Object.isExtensible(t)).toThrow("isExtensible is not Supported by RemoteObject");
-    });
-    test("preventExtensions should fail", () => {
-      const t = getObject();
-      expect(() => Object.preventExtensions(t)).toThrow("'preventExtensions' on proxy: trap returned falsish");
-    });
-    test("set should fail", () => {
-      const t = getObject();
-      //@ts-ignore
-      expect(() => t.test = "test").toThrow("'set' on proxy: trap returned falsish for property 'test'");
-    });
-    test("setPrototypeOf should fail", () => {
-      const t = getObject();
-      expect(() => Object.setPrototypeOf(t, {})).toThrow("'setPrototypeOf' on proxy: trap returned falsish for property 'undefined'");
+      expect(fn).nthCalledWith(1, { root: expect.anything(), path: [{ type: "get", name: "test" }, { type: "call", args: [10] }] });
     });
   });
 });
