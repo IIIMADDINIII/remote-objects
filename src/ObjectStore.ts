@@ -113,12 +113,12 @@ export class ObjectStore {
    * @param request - the request information from Remote (JSON Compatible).
    * @returns a Promise containing the response for the Request to send to Remote (JSON Compatible).
    */
-  requestHandler(request: Transferable): Promise<Transferable> {
+  async requestHandler(request: Transferable): Promise<Transferable> {
     this.#checkClosed();
     if (typeof request !== "object") throw new Error("request is not a message from Remote ObjectStore because it is not a object.");
     if (!("type" in request)) throw new Error("request is not a message from Remote ObjectStore because it has no type field.");
     const message = <RemoteDataDescription>request;
-    if (message.type === "remote") return this.#describePromiseResult(this.#resolveRemoteValue(message));
+    if (message.type === "remote") return await this.#describePromiseResult(this.#resolveRemoteValue(message));
     throw new Error("request is not a message from Remote ObjectStore because it has a unknown value in the type field.");
   };
 
@@ -168,8 +168,6 @@ export class ObjectStore {
     return value;
   }
 
-
-
   /**
    * Called whenever a remote object was garbage collected.
    * Will remove the Objects form cache and remember the id to inform remote later.
@@ -181,26 +179,12 @@ export class ObjectStore {
     this.#objectsToClean.add(id);
   }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
   /**
    * Awaits a Promise and describes the Result.
    * If the Promise rejects the error is described.
    * @param promise - the Promise to await.
    * @returns the Description of the resolved value or rejected Error.
    */
-  //@ts-ignore
   async #describePromiseResult(promise: Promise<unknown>): Promise<ValueDescription> {
     try {
       return this.#getValueDescription(await promise);
@@ -237,8 +221,6 @@ export class ObjectStore {
         return this.#cacheDescription(value, (id) => this.#getObjectDescription(value, id)) as R;
     }
   }
-
-
 
   /**
    * Generates a description of a local object.
@@ -324,7 +306,7 @@ export class ObjectStore {
           break;
       }
     }
-    return root;
+    return value;
   }
 
   /**
@@ -344,7 +326,7 @@ export class ObjectStore {
     const ownKeys = await this.#createOwnKeysMap(description.ownKeys);
     const hasKeys = await Promise.all(description.hasKeys.map((v) => this.#createValue(v)));
     const prototype = await this.#createValue(description.prototype);
-    return this.#createRemoteProxy<T>(data, type === "function" ? new Function() : {}, false, {
+    return this.#createRemoteProxy<T>(data, type === "function" ? functionDefinition : {}, false, {
       getPrototypeOf(_target: unknown): {} | null {
         return prototype;
       },
@@ -384,7 +366,7 @@ export class ObjectStore {
    * @param additionalHandlers - extra handlers to provide extra functionality to the Proxy. 
    * @returns a Proxy Object representing the remote Object.
    */
-  #createRemoteProxy<T extends RemoteObjectAble>(data: RemoteDataDescription, base: {} = new Function(), resolveAsPromise: boolean = true, additionalHandlers: ProxyHandler<RemoteObject<T>> = {}): RemoteObject<T> {
+  #createRemoteProxy<T extends RemoteObjectAble>(data: RemoteDataDescription, base: {} = functionDefinition, resolveAsPromise: boolean = true, additionalHandlers: ProxyHandler<RemoteObject<T>> = {}): RemoteObject<T> {
     const handler: ProxyHandler<RemoteObject<T>> = {
       get: (_target: unknown, name: string | symbol, _receiver: unknown): RemoteObject<{}> | undefined => {
         if (name === "then") return !resolveAsPromise ? undefined : (onfulfilled: () => void, onrejected: () => void) => {
@@ -523,6 +505,11 @@ const undefinedDescription: UndefinedDescription = { type: "undefined" };
  * Object representing null.
  */
 const nullDescription: NullDescription = { type: "null" };
+
+/**
+ * An function used for Proxies.
+ */
+const functionDefinition: Function = new Function();
 
 /**
  * Definition of all unsupported handlers.
