@@ -1,6 +1,5 @@
 import testing from "consts:testing";
 
-
 type ClassPrivateFieldDecoratorContext<This = unknown, Value = unknown> = ClassFieldDecoratorContext<This, Value> & { readonly private: true; };
 
 if (testing) {

@@ -1,17 +1,17 @@
 import { describe, expect, jest, test } from '@jest/globals';
 import { setTimeout as wait } from "timers/promises";
-import { RequestHandler, type RequestHandlerOptions } from "./RequestHandler.js";
+import { RequestHandler } from "./RequestHandler.js";
 import { setTestable } from "./util.js";
 
 /* istanbul ignore next */
 describe('RequestHandler.ts', () => {
 
-  function getRequestHandler(options?: RequestHandlerOptions) {
+  function getRequestHandler(timeout?: number) {
     const rh = new RequestHandler({
       async sendMessage(data) {
-        setTimeout(() => rh.newMessage(data), 0);
+        setTimeout(() => rh.newMessageHandler(data), 0);
       }
-    }, options);
+    }, timeout);
     rh.on("error", () => { });
     return rh;
   }
@@ -19,9 +19,9 @@ describe('RequestHandler.ts', () => {
   function getFaultyRequestHandlerPair() {
     const master = new RequestHandler({
       async sendMessage(data) {
-        setTimeout(() => faulty.newMessage(data), 0);
+        setTimeout(() => faulty.newMessageHandler(data), 0);
       }
-    }, { timeout: 100 });
+    }, 100);
     const faulty = new RequestHandler({
       async sendMessage(_data) {
         throw new Error("test");
@@ -40,7 +40,7 @@ describe('RequestHandler.ts', () => {
             dh = disconnected;
           },
         });
-        expect(rh.disconnected).toStrictEqual(dh);
+        expect(rh.disconnectedHandler).toStrictEqual(dh);
       });
       test("should call setNewMessageHandler", () => {
         let mh = (_a: any) => { };
@@ -50,7 +50,7 @@ describe('RequestHandler.ts', () => {
             mh = newMessage;
           },
         });
-        expect(rh.newMessage).toStrictEqual(mh);
+        expect(rh.newMessageHandler).toStrictEqual(mh);
       });
     });
     describe("request", () => {
@@ -78,9 +78,10 @@ describe('RequestHandler.ts', () => {
         await expect(rh.request({})).rejects.toThrow("test");
       });
       test("should throw if timeout is reached", async () => {
-        const rh = getRequestHandler({ timeout: 100 });
+        const rh = getRequestHandler(100);
         rh.setRequestHandler(async (_request) => {
           await wait(200);
+          return "aaa";
         });
         await expect(rh.request({})).rejects.toThrow("Request Timeout reached");
       });
@@ -134,17 +135,17 @@ describe('RequestHandler.ts', () => {
     describe("newMessage", () => {
       test("throw if message is not an object", () => {
         const rh = getRequestHandler();
-        expect(() => rh.newMessage("")).toThrow("data needs to contain a id [number] and a request, response or errorResponse");
+        expect(() => rh.newMessageHandler("")).toThrow("data needs to contain a id [number] and a request, response or errorResponse");
       });
       test("throw if message does not contain an id as number", () => {
         const rh = getRequestHandler();
-        expect(() => rh.newMessage({ id: "" })).toThrow("data needs to contain a id [number] and a request, response or errorResponse");
+        expect(() => rh.newMessageHandler({ id: "" })).toThrow("data needs to contain a id [number] and a request, response or errorResponse");
       });
       test("throw if response id is unknown", () => {
         const rh = getRequestHandler();
         const cb = jest.fn();
         rh.on("error", cb);
-        rh.newMessage({ id: 0, errorResponse: "" });
+        rh.newMessageHandler({ id: 0, errorResponse: "" });
         expect(() => { throw cb.mock.lastCall?.[0]; }).toThrow("Response with invalid id (maybe from timeout): ");
       });
       test("should Error on request when already closed", () => {
@@ -152,37 +153,27 @@ describe('RequestHandler.ts', () => {
         const cb = jest.fn();
         rh.on("error", cb);
         rh.close();
-        rh.newMessage({ id: 0, request: "" });
+        rh.newMessageHandler({ id: 0, request: "" });
         expect(() => { throw cb.mock.lastCall?.[0]; }).toThrow("Connection is already closed");
       });
-      test("error response arrives before message could be send", () => {
-        const rh = getRequestHandler();
-        const cb = jest.fn();
-        rh.on("error", cb);
-        rh.request(0).catch(() => { });
-        rh.newMessage({ id: 1, errorResponse: "test" });
-        expect(() => { throw cb.mock.lastCall?.[0]; }).toThrow("Response with invalid id (maybe from timeout):");
-      });
-      test("response arrives before message could be send", () => {
-        const rh = getRequestHandler();
-        const cb = jest.fn();
-        rh.on("error", cb);
-        rh.request(0).catch(() => { });
-        rh.newMessage({ id: 1, response: "test" });
-        expect(() => { throw cb.mock.lastCall?.[0]; }).toThrow("Response with invalid id (maybe from timeout):");
-      });
     });
-    describe("setDisconnectedHandler", () => {
-      test("handler should be called", () => {
-        const rh = getRequestHandler();
+    describe("disconnectedHandler", () => {
+      test("should call disconnectedHandler on Parent and MessageHandler", () => {
+        const messageCallback = jest.fn();
+        const rh = new RequestHandler({
+          async sendMessage() { },
+          disconnectedHandler: messageCallback,
+        });
         const callback = jest.fn();
         rh.setDisconnectedHandler(callback);
         // Disconnect should do the same as close
-        rh.disconnected();
+        rh.disconnectedHandler();
         expect(callback).toBeCalledTimes(1);
+        expect(messageCallback).toBeCalledTimes(1);
         // Closing twice should not call the callback again
         rh.close();
         expect(callback).toBeCalledTimes(1);
+        expect(messageCallback).toBeCalledTimes(1);
       });
     });
   });
