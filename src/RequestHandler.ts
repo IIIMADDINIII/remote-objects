@@ -65,22 +65,21 @@ export class RequestError extends Error { }
 
 /**
  * Events for the RequestHandler Class.
- * @public
  */
-export type RequestHandlerEvents = {
+type RequestHandlerEvents = {
   error(error: Error): void;
 };
 
 /**
- * @partial
+ * Base EventEmitter Class to make EventEmitter typeSafe.
  */
-const RequestHandler_base = EventEmitter as new () => TypedEventEmitter<RequestHandlerEvents>;
+const RequestHandlerBase = EventEmitter as new () => TypedEventEmitter<RequestHandlerEvents>;
 
 /**
  * A Implementation of an Request Handler to use with message channels like postMessage or Websockets.
  * @public
  */
-export class RequestHandler extends RequestHandler_base implements RequestHandlerInterface {
+export class RequestHandler extends RequestHandlerBase implements RequestHandlerInterface {
   #messageHandler: MessageHandlerInterface;
   #requestHandler: RequestHandlerFunction | undefined;
   #disconnectedHandler: DisconnectedHandler | undefined;

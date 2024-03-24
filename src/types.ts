@@ -194,10 +194,14 @@ export type Local<T> =
 
 export type RemoteId = string | number;
 export type KeyDescription = string | SymbolDescription;
+export type OwnKeyDescription = {
+  key: KeyDescription;
+  enumerable: boolean;
+};
 export type ObjectDescription = {
   id: RemoteId;
   type: "function" | "object";
-  ownKeys: KeyDescription[];
+  ownKeys: OwnKeyDescription[];
   hasKeys: KeyDescription[];
   prototype: ObjectDescription | NullDescription;
 };

@@ -16,6 +16,7 @@
       "args": [
         "--runInBand",
         "--watchAll=false",
+        "--testTimeout=100000000",
         "--testNamePattern",
         "${jest.testNamePattern}",
         "--runTestsByPath",
