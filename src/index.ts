@@ -34,12 +34,9 @@ export * from "./Interfaces.js";
 export type {
   Local, Primitives,
   Remote,
-  RemoteConstructor,
-  RemoteError,
+  RemoteConstructor, RemoteConstructorPromise, RemoteError,
   RemoteFunction,
-  RemoteFunctionParameters,
-  RemoteObj,
-  RemoteObject,
+  RemoteFunctionParameters, RemoteFunctionPromise, RemoteObj, RemoteObjPromise, RemoteObject,
   RemoteObjectAble,
   RemoteObjectPrototype, RemotePrimitiveReadonly,
   RemotePrimitiveSettable, RemoteReturnType

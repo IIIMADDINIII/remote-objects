@@ -1,5 +1,5 @@
 import type { RequestHandlerInterface, Transferable } from "./Interfaces.js";
-import type { CreateValue, ErrorDescription, GetValueDescription, MayHaveSymbol, NullDescription, ObjectDescription, ObjectStoreOptions, OwnKeyDescription, PathSegment, RemoteDataDescription, RemoteId, RemoteObject, RemoteObjectAble, SymbolDescription, UndefinedDescription, ValueDescription } from "./types.js";
+import type { CreateValue, ErrorDescription, GetValueDescription, MayHaveSymbol, NullDescription, ObjectDescription, ObjectStoreOptions, OwnKeyDescription, PathSegment, RemoteDataDescription, RemoteId, RemoteObjPromise, RemoteObject, RemoteObjectAble, SymbolDescription, UndefinedDescription, ValueDescription } from "./types.js";
 
 /**
  * Class to handle object Caching and Translation of ObjectDescriptions to RemoteObjects.
@@ -44,6 +44,7 @@ export class ObjectStore {
    * @public
    */
   exposeRemoteObject(id: string, object: RemoteObjectAble): void {
+    this.#checkClosed();
     if (this.#localObjects.has(id)) throw new Error(`Remote Object with id ${id} is already exposed.`);
     const description = this.#getObjectDescription(object, id);
     this.#localObjectsId.set(object, description);
@@ -60,6 +61,7 @@ export class ObjectStore {
    * @public
    */
   async requestRemoteObject<T extends RemoteObjectAble>(id: string): Promise<RemoteObject<T>> {
+    this.#checkClosed();
     const ro = this.#keepStringIds.get(id);
     if (ro !== undefined) return <RemoteObject<T>>ro;
     return <RemoteObject<T>>await this.#requestValue({ type: "remote", root: id, path: [] });
@@ -75,6 +77,7 @@ export class ObjectStore {
    * @public
    */
   getRemoteObject<T extends RemoteObjectAble>(id: string): RemoteObject<T> {
+    this.#checkClosed();
     return <RemoteObject<T>>this.#createRemoteProxy({ type: "remote", root: id, path: [] });
   }
 
@@ -103,6 +106,7 @@ export class ObjectStore {
   close(): void {
     if (this.#closed) return;
     this.#closed = true;
+    this.#requestHandler.request({ type: "close" }).catch(() => { });
     if (this.#requestHandler.disconnectedHandler) this.#requestHandler.disconnectedHandler();
   };
 
@@ -117,9 +121,11 @@ export class ObjectStore {
     this.#checkClosed();
     if (typeof request !== "object") throw new Error("request is not a message from Remote ObjectStore because it is not a object.");
     if (!("type" in request)) throw new Error("request is not a message from Remote ObjectStore because it has no type field.");
-    const message = <RemoteDataDescription>request;
-    if (message.type === "remote") return await this.#describePromiseResult(this.#resolveRemoteValue(message));
-    throw new Error("request is not a message from Remote ObjectStore because it has a unknown value in the type field.");
+    switch (request["type"]) {
+      case "close": return this.close(), "";
+      case "remote": return await this.#describePromiseResult(this.#resolveRemoteValue(<RemoteDataDescription>request));
+      default: throw new Error("request is not a message from Remote ObjectStore because it has a unknown value in the type field.");
+    }
   };
 
   /**
@@ -229,12 +235,14 @@ export class ObjectStore {
    * @returns the Description of the object for sending to Remote.
    */
   #getObjectDescription(object: {}, id: RemoteId): ObjectDescription {
+    const type = typeof object === "function" ? "function" : "object";
     return {
       id,
-      type: typeof object === "function" ? "function" : "object",
+      type,
       ownKeys: this.#getOwnKeysOfObject(object),
       hasKeys: this.#options.remoteObjectPrototype !== "keysOnly" ? [] : getAllKeys(object).map((v) => this.#getValueDescription(v)),
       prototype: this.#options.remoteObjectPrototype !== "full" ? nullDescription : this.#getValueDescription(Reflect.getPrototypeOf(object)),
+      functionPrototype: type !== "function" ? undefinedDescription : this.#getValueDescription((<Function>object).prototype),
     };
   }
 
@@ -282,7 +290,6 @@ export class ObjectStore {
   async #resolveRemoteValue(description: RemoteDataDescription): Promise<unknown> {
     const root = this.#localObjects.get(description.root);
     if (root === undefined) throw new Error(`Object with id ${description.root} is unknown.`);
-    if (typeof root === "symbol") throw new Error(`Object with id ${description.root} is unknown.`);
     let parent: any = undefined;
     let value: any = root;
     for (const segment of description.path) {
@@ -297,8 +304,8 @@ export class ObjectStore {
           value = undefined;
           break;
         case "call":
-          parent = undefined;
           value = await value.call(parent, ...await Promise.all(segment.args.map((v) => this.#createValue(v))));
+          parent = undefined;
           break;
         case "new":
           parent = undefined;
@@ -326,7 +333,8 @@ export class ObjectStore {
     const ownKeys = await this.#createOwnKeysMap(description.ownKeys);
     const hasKeys = await Promise.all(description.hasKeys.map((v) => this.#createValue(v)));
     const prototype = await this.#createValue(description.prototype);
-    return this.#createRemoteProxy<T>(data, type === "function" ? functionDefinition : {}, false, {
+    const functionPrototype = await this.#createValue(description.functionPrototype);
+    return this.#createRemoteProxy<T>(data, type === "function" ? functionDefinition : {}, false, functionPrototype, {
       getPrototypeOf(_target: unknown): {} | null {
         return prototype;
       },
@@ -366,14 +374,16 @@ export class ObjectStore {
    * @param additionalHandlers - extra handlers to provide extra functionality to the Proxy. 
    * @returns a Proxy Object representing the remote Object.
    */
-  #createRemoteProxy<T extends RemoteObjectAble>(data: RemoteDataDescription, base: {} = functionDefinition, resolveAsPromise: boolean = true, additionalHandlers: ProxyHandler<RemoteObject<T>> = {}): RemoteObject<T> {
+  #createRemoteProxy<T extends RemoteObjectAble>(data: RemoteDataDescription, base: {} = functionDefinition, resolveAsPromise: boolean = true, functionPrototype: {} | undefined = undefined, additionalHandlers: ProxyHandler<RemoteObject<T>> = {}): RemoteObject<T> {
     const handler: ProxyHandler<RemoteObject<T>> = {
       get: (_target: unknown, name: string | symbol, _receiver: unknown): RemoteObject<{}> | undefined => {
-        if (name === "then") return !resolveAsPromise ? undefined : (onfulfilled: () => void, onrejected: () => void) => {
+        if (name === "then") return <RemoteObjPromise<T>><unknown>(!resolveAsPromise ? undefined : (onfulfilled: () => void, onrejected: () => void) => {
           this.#requestValue(data).then(onfulfilled, onrejected);
-        };
-        if (name === this.#symbolProxyData) return data;
-        if (name === "set") return async (value: unknown) => await this.#requestValue(appendProxyPath(data, { type: "set", name, value: this.#getValueDescription(value) }));
+        });
+        if (name === this.#symbolProxyData) return <RemoteObjPromise<T>><unknown>data;
+        if (name === Symbol.hasInstance) return undefined;
+        if (name === "prototype") return <RemoteObjPromise<T>><unknown>functionPrototype;
+        if (name === "set") return <RemoteObjPromise<T>><unknown>(async (value: unknown) => await this.#requestValue(appendProxyPath(data, { type: "set", name, value: this.#getValueDescription(value) })));
         return this.#createRemoteProxy(appendProxyPath(data, { type: "get", name: this.#getValueDescription(name) }));
       },
       apply: (_target: unknown, _thisArg: unknown, args: unknown[]): RemoteObject<{}> => {
@@ -385,7 +395,8 @@ export class ObjectStore {
       ...additionalHandlers
     };
     Object.setPrototypeOf(handler, UnsupportedHandlers);
-    return <RemoteObject<T>>new Proxy(base, handler);
+    const proxy = <RemoteObject<T>>new Proxy(base, handler);
+    return proxy;
   }
 
   /**
@@ -393,12 +404,10 @@ export class ObjectStore {
    * @param value - any value which is maybe an Proxy.
    * @returns the internal Data of the Proxy or undefined if value is not a Proxy.
    */
-  #getProxyData(value: unknown): RemoteDataDescription | undefined {
-    if (typeof value !== "function" && typeof value !== "object") return undefined;
-    if (value === null) return undefined;
-    const d = <MayHaveSymbol<RemoteDataDescription>>value;
-    if (typeof d[this.#symbolProxyData] !== "object") return undefined;
-    return d[this.#symbolProxyData];
+  #getProxyData(value: Function | object): RemoteDataDescription | undefined {
+    const symbolData = (<MayHaveSymbol<RemoteDataDescription>>value)[this.#symbolProxyData];
+    if (typeof symbolData !== "object") return undefined;
+    return symbolData;
   }
 
   /**
@@ -478,8 +487,7 @@ function getAllKeys(object: {}): (string | symbol)[] {
  */
 function createError(description: ErrorDescription, cause: unknown): unknown {
   if (description.message === undefined && description.stack === undefined && description.name === undefined) return cause;
-  const message = description.message || "Remote Error";
-  const error = new Error(message, { cause });
+  const error = new Error(description.message, { cause });
   if (description.name !== undefined) {
     if (error.stack !== undefined && error.stack.startsWith(error.name)) error.stack = description.name + error.stack.slice(error.name.length);
     error.name = description.name;
@@ -516,16 +524,16 @@ const functionDefinition: Function = new Function();
  */
 const UnsupportedHandlers: ProxyHandler<{}> = {
   getPrototypeOf(_target: unknown): never {
-    throw new TypeError("getPrototypeOf is currently not Supported by RemoteObject");
+    throw new TypeError("getPrototypeOf is not Supported by RemoteObject Proxy. Await the RemoteObject to be able to query metadata.");
   },
   has(_target: unknown, _property: string | symbol): never {
-    throw new TypeError("has is currently not Supported by RemoteObject");
+    throw new TypeError("has is not Supported by RemoteObject Proxy. Await the RemoteObject to be able to query metadata.");
   },
   ownKeys(_target: unknown): never {
-    throw new TypeError("ownKeys is currently not Supported by RemoteObject");
+    throw new TypeError("ownKeys is not Supported by RemoteObject Proxy. Await the RemoteObject to be able to query metadata.");
   },
   getOwnPropertyDescriptor(_target: unknown, _property: string | symbol): never {
-    throw new TypeError("getOwnPropertyDescriptor is currently not Supported by RemoteObject");
+    throw new TypeError("getOwnPropertyDescriptor is not Supported by RemoteObject Proxy. Await the RemoteObject to be able to query metadata.");
   },
   defineProperty(_target: unknown, _property: string | symbol, _attributes: PropertyDescriptor): false {
     return false;

@@ -166,6 +166,9 @@ export class RequestHandler extends RequestHandlerBase implements RequestHandler
   close(): void {
     if (this.#closed) return;
     this.#closed = true;
+    for (const request of this.#pendingRequests.values()) {
+      request.error(new RequestError("Connection was Closed"));
+    }
     this.#pendingRequests.clear();
     if (this.#disconnectedHandler) this.#disconnectedHandler();
     if (this.#messageHandler.disconnectedHandler) this.#messageHandler.disconnectedHandler();
@@ -211,6 +214,7 @@ export class RequestHandler extends RequestHandlerBase implements RequestHandler
    * @param data - the Data received from Remote.
    */
   #handleResponse(data: ResponseMessage | ErrorResponseMessage): void {
+    if (this.#closed) return this.emit("error", new Error("Connection is already closed")), void 0;
     const id = data.id;
     const resolveRequest = this.#pendingRequests.get(id);
     if (resolveRequest === undefined) return this.emit("error", new Error("Response with invalid id (maybe from timeout): " + id)), void 0;

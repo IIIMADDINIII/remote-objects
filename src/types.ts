@@ -69,10 +69,12 @@ export type RemoteObjectAble = {} | ((...args: any[]) => any) | (new (...args: a
  * @public
  */
 export type Remote<T> =
-  T extends new (...args: any[]) => any ? RemoteConstructor<T> :
-  T extends (...args: any[]) => any ? RemoteFunction<T> :
+  [T] extends [never] ? RemotePrimitiveReadonly<T> :
+  T extends new (...args: any[]) => any ? RemoteConstructorPromise<T> :
+  T extends (...args: any[]) => any ? RemoteFunctionPromise<T> :
   T extends Primitives ? RemotePrimitiveSettable<T> :
-  T extends {} ? RemoteObj<T> :
+  T extends {} ? RemoteObjPromise<T> :
+  T extends never ? Promise<never> :
   never;
 
 /**
@@ -80,9 +82,9 @@ export type Remote<T> =
  * @public
  */
 export type RemoteObject<T extends RemoteObjectAble> =
-  T extends new (...args: any[]) => any ? RemoteConstructor<T> :
-  T extends (...args: any[]) => any ? RemoteFunction<T> :
-  T extends {} ? RemoteObj<T> :
+  T extends new (...args: any[]) => any ? RemoteConstructorPromise<T> :
+  T extends (...args: any[]) => any ? RemoteFunctionPromise<T> :
+  T extends {} ? RemoteObjPromise<T> :
   never;
 
 /**
@@ -94,24 +96,38 @@ export type RemoteObj<T extends {}> = {
 };
 
 /**
+ * Makes it possible to await an object.
+ * @public
+ */
+export type RemoteObjPromise<T extends {}> = RemoteObj<T> & Promise<RemoteObj<T>>;
+
+/**
  * Is mapping a Function from the Remote to how the types are represented locally.
  * @public
  */
 export type RemoteFunction<T extends (...args: any[]) => any> =
-  T extends (...args: infer Parameters) => infer ReturnType ? (
-    Parameters extends (Primitives | Remote<infer _>)[] ? (...args: RemoteFunctionParameters<Parameters>) => RemoteReturnType<ReturnType> :
-    never) :
+  T extends (...args: infer Parameters) => infer ReturnType ? (...args: RemoteFunctionParameters<Parameters>) => RemoteReturnType<ReturnType> :
   never;
+
+/**
+ * Makes it possible to await an function.
+ * @public
+ */
+export type RemoteFunctionPromise<T extends (...args: any[]) => any> = RemoteFunction<T> & Promise<RemoteFunction<T>>;
 
 /**
  * Is mapping a Constructor from the Remote to how the types are represented locally.
  * @public
  */
 export type RemoteConstructor<T extends new () => any> =
-  T extends new (...args: infer Parameters) => infer ReturnType ? (
-    Parameters extends (Primitives | Remote<infer _>)[] ? new (...args: RemoteFunctionParameters<Parameters>) => RemoteReturnType<ReturnType> :
-    never) :
+  T extends new (...args: infer Parameters) => infer ReturnType ? new (...args: RemoteFunctionParameters<Parameters>) => RemoteReturnType<ReturnType> :
   never;
+
+/**
+ * Makes it possible to await an constructor.
+ * @public
+ */
+export type RemoteConstructorPromise<T extends new () => any> = RemoteConstructor<T> & Promise<RemoteConstructor<T>>;
 
 /**
  * Is mapping the function Parameters Types from the Remote to how the types are represented locally.
@@ -124,7 +140,9 @@ export type RemoteFunctionParameters<T> = { [K in keyof T]: Local<T[K]> };
  * @public
  */
 export type RemoteReturnType<T> =
+  [T] extends [never] ? Remote<never> :
   T extends Primitives ? RemotePrimitiveReadonly<T> :
+  T extends Remote<infer Local> ? Local :
   Remote<T>;
 
 /**
@@ -154,21 +172,7 @@ export type Primitives = string | number | boolean | null | undefined | void | b
 export type Local<T> =
   T extends Primitives ? T :
   T extends Remote<infer R> ? R :
-  never;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+  Remote<T>;
 
 
 
@@ -204,6 +208,7 @@ export type ObjectDescription = {
   ownKeys: OwnKeyDescription[];
   hasKeys: KeyDescription[];
   prototype: ObjectDescription | NullDescription;
+  functionPrototype: ObjectDescription | UndefinedDescription;
 };
 export type BigIntDescription = { type: "bigint"; value: string; };
 export type UndefinedDescription = { type: "undefined"; };

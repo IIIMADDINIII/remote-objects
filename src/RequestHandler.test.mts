@@ -156,6 +156,14 @@ describe('RequestHandler.ts', () => {
         rh.newMessageHandler({ id: 0, request: "" });
         expect(() => { throw cb.mock.lastCall?.[0]; }).toThrow("Connection is already closed");
       });
+      test("should Error on response when already closed", () => {
+        const rh = getRequestHandler();
+        const cb = jest.fn();
+        rh.on("error", cb);
+        rh.close();
+        rh.newMessageHandler({ id: 0, response: "" });
+        expect(() => { throw cb.mock.lastCall?.[0]; }).toThrow("Connection is already closed");
+      });
     });
     describe("disconnectedHandler", () => {
       test("should call disconnectedHandler on Parent and MessageHandler", () => {
@@ -174,6 +182,14 @@ describe('RequestHandler.ts', () => {
         rh.close();
         expect(callback).toBeCalledTimes(1);
         expect(messageCallback).toBeCalledTimes(1);
+      });
+      test("Open Requests should be handled", async () => {
+        const rh = new RequestHandler({
+          async sendMessage() { },
+        });
+        const request = rh.request("test");
+        rh.close();
+        await expect(request).rejects.toThrow("Connection was Closed");
       });
     });
   });
