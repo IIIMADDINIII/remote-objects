@@ -113,7 +113,7 @@ export type RemoteFunction<T extends (...args: any[]) => any> =
  * Makes it possible to await an function.
  * @public
  */
-export type RemoteFunctionPromise<T extends (...args: any[]) => any> = RemoteFunction<T> & Promise<RemoteFunction<T>>;
+export type RemoteFunctionPromise<T extends (...args: any[]) => any> = RemoteFunction<T> & Promise<RemoteFunction<T>> | RemoteFunction<T>;
 
 /**
  * Is mapping a Constructor from the Remote to how the types are represented locally.
@@ -127,7 +127,7 @@ export type RemoteConstructor<T extends new () => any> =
  * Makes it possible to await an constructor.
  * @public
  */
-export type RemoteConstructorPromise<T extends new () => any> = RemoteConstructor<T> & Promise<RemoteConstructor<T>>;
+export type RemoteConstructorPromise<T extends new () => any> = RemoteConstructor<T> & Promise<RemoteConstructor<T>> | RemoteConstructor<T>;
 
 /**
  * Is mapping the function Parameters Types from the Remote to how the types are represented locally.
@@ -136,10 +136,42 @@ export type RemoteConstructorPromise<T extends new () => any> = RemoteConstructo
 export type RemoteFunctionParameters<T> = { [K in keyof T]: Local<T[K]> };
 
 /**
+ * inverse to Remote<T>.
+ * @public
+ */
+export type Local<T> =
+  T extends Primitives ? T :
+  T extends (...args: any[]) => any ? LocalFunction<T> :
+  T extends new (...args: any[]) => any ? LocalConstructor<T> :
+  T extends Remote<infer R> ? R :
+  Remote<T>;
+
+/**
+ * Helper to convert Function Parameters Properly.
+ * @public
+ */
+export type LocalFunction<T extends (...args: any[]) => any> =
+  T extends (...args: infer Parameters) => infer ReturnType ?
+  ReturnType extends PromiseLike<infer ReturnType> ? ((...args: RemoteFunctionParameters<Parameters>) => ReturnType | PromiseLike<ReturnType>) | Remote<T> :
+  Remote<T> :
+  never;
+
+/**
+ * Helper to convert Constructor Parameters Properly.
+ * @public
+ */
+export type LocalConstructor<T extends new (...args: any[]) => any> =
+  T extends new (...args: infer Parameters) => infer ReturnType ?
+  ReturnType extends PromiseLike<infer ReturnType> ? Remote<T> | (new (...args: RemoteFunctionParameters<Parameters>) => ReturnType | PromiseLike<ReturnType>) :
+  Remote<T> :
+  never;
+
+/**
  * Is mapping the function Return Type from the Remote to how the types are represented locally.
  * @public
  */
 export type RemoteReturnType<T> =
+  T extends PromiseLike<infer T> ? RemoteReturnType<T> :
   [T] extends [never] ? Remote<never> :
   T extends Primitives ? RemotePrimitiveReadonly<T> :
   T extends Remote<infer Local> ? Local :
@@ -165,14 +197,7 @@ export type RemotePrimitiveReadonly<T extends Primitives> = PromiseLike<T>;
  */
 export type Primitives = string | number | boolean | null | undefined | void | bigint | symbol;
 
-/**
- * inverse to Remote<T>.
- * @public
- */
-export type Local<T> =
-  T extends Primitives ? T :
-  T extends Remote<infer R> ? R :
-  Remote<T>;
+
 
 
 

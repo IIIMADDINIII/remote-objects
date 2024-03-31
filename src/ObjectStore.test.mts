@@ -373,6 +373,34 @@ describe('RequestHandler.ts', () => {
         const a = local.getRemoteObject<typeof api>("test");
         expect(() => Object.setPrototypeOf(a, {})).toThrow("'setPrototypeOf' on proxy: trap returned falsish for property 'undefined'");
       });
+      test("callbacks should work", async () => {
+        class Base { a: number; constructor(a: number) { this.a = a; } }
+        class RemoteClass extends Base { };
+        class LocalClass extends Base { };
+        const api = {
+          sync(cb: (a: number) => number) { return cb(10); },
+          double(a: number) { return a * 2; },
+          async async(cb: (a: number) => Promise<number>) { return await cb(10); },
+          syncConstruct(cl: new (a: number) => Base) { return new cl(10); },
+          async asyncConstruct(cl: new (a: number) => Promise<Base>) { return await (new cl(10)); },
+          RemoteClass,
+          async callbackCallback(cb: (cb: (a: number) => number) => Promise<number>) { return await cb((a) => a * 3); }
+        };
+        const [remote, local] = getObjectStorePair();
+        remote.exposeRemoteObject("test", api);
+        const a = local.getRemoteObject<typeof api>("test");
+        const tripple = (a: number) => a * 3;
+        const callback = async (cb: (a: number) => PromiseLike<number>) => await cb(10) * 2;
+        expect(await a.sync(a.double)).toEqual(20);
+        expect(await a.async(a.double)).toEqual(20);
+        expect(await a.async(tripple)).toEqual(30);
+
+        expect(await a.syncConstruct(a.RemoteClass).a).toEqual(10);
+        expect(await a.asyncConstruct(a.RemoteClass).a).toEqual(10);
+        expect(await a.asyncConstruct(LocalClass).a).toEqual(10);
+
+        expect(await a.callbackCallback(callback)).toEqual(60);
+      });
     });
     describe("newMessage", () => {
       test("should call newMessageHandler on requestHandler", () => {
