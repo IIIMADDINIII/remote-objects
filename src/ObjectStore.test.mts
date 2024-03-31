@@ -421,7 +421,7 @@ describe('RequestHandler.ts', () => {
         const os = new ObjectStore({ async request() { return ""; }, disconnectedHandler });
         os.disconnectedHandler();
         expect(disconnectedHandler).toBeCalledTimes(1);
-        os.disconnectedHandler();
+        os.close();
         expect(disconnectedHandler).toBeCalledTimes(1);
       });
       test("requests after disconnect throw an error", async () => {
@@ -431,6 +431,11 @@ describe('RequestHandler.ts', () => {
         await expect(() => os.requestRemoteObject("test")).rejects.toThrow("Connection is already closed.");
         expect(() => os.getRemoteObject("test")).toThrow("Connection is already closed.");
         await expect(() => os.requestHandler("")).rejects.toThrow("Connection is already closed.");
+      });
+      test("remote should close if local is closed", async () => {
+        const [remote, local] = getObjectStorePair();
+        local.close();
+        expect(() => remote.exposeRemoteObject("test", {})).toThrow("Connection is already closed.");
       });
     });
     describe("requestHandler", () => {

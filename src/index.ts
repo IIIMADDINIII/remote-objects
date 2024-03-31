@@ -32,14 +32,25 @@ export * from "./RequestHandler.js";
 
 export * from "./Interfaces.js";
 export type {
-  Local, Primitives,
+  Local,
+  LocalConstructor,
+  LocalFunction,
+  Primitives,
   Remote,
-  RemoteConstructor, RemoteConstructorPromise, RemoteError,
+  RemoteConstructor,
+  RemoteConstructorPromise,
+  RemoteError,
   RemoteFunction,
-  RemoteFunctionParameters, RemoteFunctionPromise, RemoteObj, RemoteObjPromise, RemoteObject,
+  RemoteFunctionParameters,
+  RemoteFunctionPromise,
+  RemoteObj,
+  RemoteObjPromise,
+  RemoteObject,
   RemoteObjectAble,
-  RemoteObjectPrototype, RemotePrimitiveReadonly,
-  RemotePrimitiveSettable, RemoteReturnType
+  RemoteObjectPrototype,
+  RemotePrimitiveReadonly,
+  RemotePrimitiveSettable,
+  RemoteReturnType
 } from "./types.js";
 export { ObjectStore, type ObjectStoreOptions };
 
