@@ -27,6 +27,7 @@ export class ObjectStore {
     this.#options = {
       remoteObjectPrototype: "full",
       remoteError: "newError",
+      noToString: false,
       ...options
     };
     this.#requestHandler = requestHandler;
@@ -382,8 +383,11 @@ export class ObjectStore {
         });
         if (name === this.#symbolProxyData) return <RemoteObjPromise<T>><unknown>data;
         if (name === Symbol.hasInstance) return undefined;
-        if (name === "prototype") return <RemoteObjPromise<T>><unknown>functionPrototype;
         if (name === "set") return <RemoteObjPromise<T>><unknown>(async (value: unknown) => await this.#requestValue(appendProxyPath(data, { type: "set", name, value: this.#getValueDescription(value) })));
+        if (name === "toString" && !this.#options.noToString) return <RemoteObjPromise<T>><unknown>Object.prototype.toString;
+        if (name === Symbol.toStringTag && !this.#options.noToString) return <RemoteObjPromise<T>><unknown>"RemoteObject";
+        if (name === Symbol.toPrimitive && !this.#options.noToString) return undefined;
+        if (name === "prototype" && functionPrototype !== undefined) return <RemoteObjPromise<T>><unknown>functionPrototype;
         return this.#createRemoteProxy(appendProxyPath(data, { type: "get", name: this.#getValueDescription(name) }));
       },
       apply: (_target: unknown, _thisArg: unknown, args: unknown[]): RemoteObject<{}> => {

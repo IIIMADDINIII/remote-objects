@@ -56,6 +56,19 @@ export interface ObjectStoreOptions {
    * @default "newError"
    */
   remoteError?: RemoteError;
+  /**
+   * Defines that the toString handler should not be implemented by RemoteObjects.
+   *  - true:
+   *      Will have no special logic for toString, [Symbol.toStringTag] and [Symbol.toPrimitive] Property.
+   *      It will return a Promise for these Properties.
+   *  - false:
+   *      Will return "RemoteObject" for [Symbol.toStringTag].
+   *      ToString Property will return Object.prototype.toString.
+   *      [Symbol.toPrimitive] will return undefined.
+   *      Will not return a Promise for these Properties.
+   * @default false
+   */
+  noToString?: boolean;
 }
 
 /**
