@@ -356,6 +356,24 @@ describe('RequestHandler.ts', () => {
         const a = os.getRemoteObject("test");
         expect(a + "").toEqual("[object RemoteObject]");
       });
+      test("should be able to get a symbol field from remote", async () => {
+        const symbol = Symbol();
+        const api: { [symbol]: number, symbol: typeof symbol; } = { [symbol]: 10, symbol };
+        const [remote, local] = getObjectStorePair();
+        remote.exposeRemoteObject("test", api);
+        const a = local.getRemoteObject<typeof api>("test");
+        const value = await a[await a.symbol];
+        expect(value).toEqual(10);
+      });
+      test("should be able to set a symbol field from local", async () => {
+        const symbol: symbol = Symbol();
+        const api: { [key: symbol]: number; } = {};
+        const [remote, local] = getObjectStorePair();
+        remote.exposeRemoteObject("test", api);
+        const a = local.getRemoteObject<typeof api>("test");
+        await a[symbol]?.set(11);
+        expect(await a[symbol]).toEqual(11);
+      });
       // Unsupported Proxy Handlers
       test("getProtypeOf should fail", async () => {
         const api = {};
@@ -427,7 +445,6 @@ describe('RequestHandler.ts', () => {
         const a = local.getRemoteObject<typeof api>("test");
         expect(() => Object.setPrototypeOf(a, {})).toThrow("'setPrototypeOf' on proxy: trap returned falsish for property 'undefined'");
       });
-
     });
     describe("newMessage", () => {
       test("should call newMessageHandler on requestHandler", () => {

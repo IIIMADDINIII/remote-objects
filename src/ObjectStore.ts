@@ -145,7 +145,7 @@ export class ObjectStore {
    * @returns a Promise resolving to a Proxy wich represents this object.
    * @public
    */
-  async requestRemoteObject<T extends RemoteObjectAble>(id: string): Promise<RemoteObject<T>> {
+  async requestRemoteObject<const T extends RemoteObjectAble>(id: string): Promise<RemoteObject<T>> {
     this.#checkClosed();
     return <RemoteObject<T>>await this.#requestValue({ type: "root", id });
   };
@@ -159,7 +159,7 @@ export class ObjectStore {
    * @returns a Proxy wich represents this object.
    * @public
    */
-  getRemoteObject<T extends RemoteObjectAble>(id: string): RemoteObject<T> {
+  getRemoteObject<const T extends RemoteObjectAble>(id: string): RemoteObject<T> {
     this.#checkClosed();
     return <RemoteObject<T>>this.#createRemoteProxy({ type: "root", id, });
   }
