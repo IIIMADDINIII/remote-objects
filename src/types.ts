@@ -184,8 +184,8 @@ export type LocalConstructor<T extends new (...args: any[]) => any> =
  * @public
  */
 export type RemoteReturnType<T> =
+  [T] extends [never] ? Remote<T> :
   T extends PromiseLike<infer T> ? RemoteReturnType<T> :
-  [T] extends [never] ? Remote<never> :
   T extends Primitives ? RemotePrimitiveReadonly<T> :
   T extends Remote<infer Local> ? Local :
   Remote<T>;
@@ -234,84 +234,124 @@ export type Primitives = string | number | boolean | null | undefined | void | b
 
 
 
-export type RemoteId = string | number;
-export type KeyDescription = string | SymbolDescription;
-export type OwnKeyDescription = {
-  key: KeyDescription;
-  enumerable: boolean;
-};
-export type ObjectDescription = {
-  id: RemoteId;
-  type: "function" | "object";
-  ownKeys: OwnKeyDescription[];
-  hasKeys: KeyDescription[];
-  prototype: ObjectDescription | NullDescription;
-  functionPrototype: ObjectDescription | UndefinedDescription;
-};
-export type BigIntDescription = { type: "bigint"; value: string; };
-export type UndefinedDescription = { type: "undefined"; };
-export type SymbolDescription = { type: "symbol"; id: RemoteId; };
-export type NullDescription = { type: "null"; };
-export type ErrorDescription = { type: "error"; value: ValueDescription; message?: string; stack?: string; name?: string; };
-export type ValueDescription = string | number | boolean | BigIntDescription | UndefinedDescription | SymbolDescription | NullDescription | ObjectDescription | ErrorDescription | RemoteDataDescription;
-export type GetValueDescription<T> =
-  T extends string | number | boolean ? T :
-  T extends BigInt ? BigIntDescription :
-  T extends undefined ? UndefinedDescription :
-  T extends symbol ? SymbolDescription :
-  T extends null ? NullDescription :
-  T extends object ? ObjectDescription :
-  T extends unknown ? RemoteDataDescription :
-  never;
 
-export type CreateValue<T extends ValueDescription> =
-  T extends string | number | boolean ? T :
-  T extends UndefinedDescription ? undefined :
-  T extends BigIntDescription ? bigint :
-  T extends SymbolDescription ? symbol :
-  T extends NullDescription ? null :
-  T extends ObjectDescription ? object :
-  T extends RemoteDataDescription ? unknown :
-  never;
 
-export type CacheDescriptionFunction = (value: object | symbol, generate: (id: RemoteId) => ObjectDescription | SymbolDescription) => ObjectDescription | SymbolDescription;
-export type CacheValueFunction = (id: RemoteId, generate: () => object | symbol) => object | symbol;
-export type RequestFunction = (proxy: RemoteDataDescription) => Promise<ValueDescription>;
 
-export type GenerateValueFunctionsOptions = {
-  remoteObjectPrototype: RemoteObjectPrototype;
-  remoteError: RemoteError;
-  cacheDescription: CacheDescriptionFunction;
-  cacheValue: CacheValueFunction;
-  request: RequestFunction;
-};
 
-export type GetValueDescriptionFunction = <T, R extends GetValueDescription<T> = GetValueDescription<T>>(value: T) => R;
-export type CreateValueFunction = <T extends ValueDescription, R extends CreateValue<T> = CreateValue<T>>(description: T) => R;
-export type DescribePromiseFunction = (promise: Promise<unknown>) => Promise<ValueDescription>;
-export type GetObjectDescriptionFunction = (object: {}, id: RemoteId) => ObjectDescription;
 
-export type GenerateValueFunctionsReturn = {
-  getValueDescription: GetValueDescriptionFunction;
-  createValue: CreateValueFunction;
-  describePromise: DescribePromiseFunction;
-  getObjectDescription: GetObjectDescriptionFunction;
-};
 
-export type Key = string | symbol;
 
-type GetPathSegment = { type: "get", name: KeyDescription; };
-type SetPathSegment = { type: "set", name: KeyDescription; value: ValueDescription; };
-type CallPathSegment = { type: "call", args: ValueDescription[]; };
-type NewPathSegment = { type: "new", args: ValueDescription[]; };
-export type PathSegment = GetPathSegment | SetPathSegment | CallPathSegment | NewPathSegment;
-type ProxyPath = PathSegment[];
-export type RemoteDataDescription = {
-  type: "remote";
-  root: RemoteId;
-  path: ProxyPath;
-};
+
+
+
+
+
+
+
 
 export type MayHaveSymbol<T> = {
   [key: symbol]: T | undefined;
 };
+
+export type Key = string | symbol;
+
+type CallPathSegment = { type: "call"; args: unknown[]; parent: ExtendableRemotePath; };
+type NewPathSegment = { type: "new"; args: unknown[]; parent: ExtendableRemotePath; };
+type GetPathSegment = { type: "get"; name: Key; parent: ExtendableRemotePath; };
+type SetPathSegment = { type: "set"; name: Key; value: unknown; parent: ExtendableRemotePath; };
+export type RootPathSegment = { type: "root"; id: GcId; description?: ResolvedObjectDescription | ResolvedFunctionDescription; };
+
+
+export type ExtendableRemotePath = RootPathSegment | GetPathSegment | NewPathSegment | CallPathSegment;
+export type ExtendingRemotePath = GetPathSegment | NewPathSegment | CallPathSegment | SetPathSegment;
+export type RemotePath = ExtendableRemotePath | SetPathSegment;
+
+
+
+export type GcId = string | number;
+export type LocalGcId = { type: "local", id: GcId; };
+export type RemoteGcId = { type: "remote", } & RemoteDescription;
+export type RemoteDescription = { id: GcId; path?: ValuePath; };
+export type LocalizedGcId = LocalGcId | RemoteGcId;
+
+export type KeyDescription = string | LocalizedGcId;
+
+type ValueCallSegment = { type: "call"; args: ValueDescription[]; };
+type ValueNewSegment = { type: "new"; args: ValueDescription[]; };
+type ValueGetSegment = { type: "get"; name: KeyDescription; };
+type ValueSetSegment = { type: "set"; name: KeyDescription; value: ValueDescription; };
+export type ValueSegment = ValueGetSegment | ValueCallSegment | ValueNewSegment | ValueSetSegment;
+export type ValuePath = ValueSegment[];
+
+
+
+type BigIntDescription = { type: "bigint"; value: string; };
+export type UndefinedDescription = { type: "undefined"; };
+export type NullDescription = { type: "null"; };
+type PrimitiveValueDescription = string | number | boolean | BigIntDescription | UndefinedDescription | NullDescription;
+
+export type OwnKeyDescription = {
+  key: KeyDescription;
+  enumerable: boolean;
+};
+
+export type ObjectDescription = {
+  id: GcId;
+  type: "object";
+  ownKeys: OwnKeyDescription[];
+  hasKeys: KeyDescription[];
+  prototype: LocalizedGcId | NullDescription;
+};
+
+export type ResolvedObjectDescription = {
+  ownKeys: Map<Key, { configurable: true, enumerable: boolean; }>;
+  hasKeys: Key[];
+  prototype: {} | null;
+};
+
+export type FunctionDescription = {
+  id: GcId;
+  type: "function";
+  ownKeys: OwnKeyDescription[];
+  hasKeys: KeyDescription[];
+  prototype: LocalizedGcId | NullDescription;
+  functionPrototype: ValueDescription;
+};
+
+export type ResolvedFunctionDescription = {
+  ownKeys: Map<Key, { configurable: true, enumerable: boolean; }>;
+  hasKeys: Key[];
+  prototype: {} | null;
+  functionPrototype: unknown;
+};
+
+export type SymbolDescription = {
+  id: GcId;
+  type: "symbol";
+};
+
+export type GcObjectDescription = ObjectDescription | FunctionDescription | SymbolDescription;
+export type GcObjectsDescription = GcObjectDescription[];
+
+export type ValueDescription = PrimitiveValueDescription | LocalizedGcId;
+
+export type ErrorDescription = { type: "error"; value: ValueDescription; message?: string; stack?: string; name?: string; };
+export type ResponseValueDescription = ValueDescription | ErrorDescription;
+
+export type ValueRequestDescription = {
+  type: "request";
+  gcObjects: GcObjectsDescription;
+} & RemoteDescription;
+
+export type ValueResponseDescription = {
+  type: "response";
+  gcObjects: GcObjectsDescription;
+  value: ResponseValueDescription;
+};
+
+export type GcIdDescription = {
+  id: GcId;
+  time: number;
+  value: symbol | {};
+}
+

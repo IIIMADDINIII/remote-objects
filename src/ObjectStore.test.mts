@@ -1,10 +1,24 @@
 import { describe, expect, jest, test } from '@jest/globals';
 import type { RequestHandlerFunction } from "./Interfaces.js";
-import { ObjectStore } from "./ObjectStore.js";
+import { ObjectStore, isProxy } from "./ObjectStore.js";
 import type { ObjectStoreOptions } from "./types.js";
 
 /* istanbul ignore next */
 describe('RequestHandler.ts', () => {
+  describe("isProxy", () => {
+    test("should only return true on a Proxy", () => {
+      const os = new ObjectStore({ async request() { return ""; } });
+      const proxy = os.getRemoteObject("test");
+      expect(isProxy(proxy)).toEqual(true);
+      expect(isProxy(10)).toEqual(false);
+      expect(isProxy(undefined)).toEqual(false);
+      expect(isProxy(null)).toEqual(false);
+      expect(isProxy(new Proxy({}, {}))).toEqual(false);
+      expect(isProxy({})).toEqual(false);
+      expect(isProxy(() => { })).toEqual(false);
+      expect(isProxy("test")).toEqual(false);
+    });
+  });
   describe("ObjectStore", () => {
     function getObjectStorePair(options: ObjectStoreOptions = {}): [ObjectStore, ObjectStore] {
       const a: ObjectStore = new ObjectStore({ request: (data) => b.requestHandler(data) }, options);
@@ -78,8 +92,10 @@ describe('RequestHandler.ts', () => {
     describe("exposeRemoteObject", () => {
       test("Id can not be exposed twice", () => {
         const os = new ObjectStore({ async request() { return ""; } });
-        os.exposeRemoteObject("test", {});
+        const api = {};
+        os.exposeRemoteObject("test", api);
         expect(() => os.exposeRemoteObject("test", {})).toThrow("Remote Object with id test is already exposed.");
+        expect(() => os.exposeRemoteObject("test2", api)).toThrow("Remote Object is already exposed as test.");
       });
       test("exposed api should be accessible with requestRemoteObject", async () => {
         const [remote, local] = getObjectStorePair();
