@@ -480,7 +480,10 @@ export class ObjectStore {
       id: desc.id,
       description,
     };
-    return this.#createRemoteProxy(data, functionDefinition, {
+    let base = callableDefinition;
+    const functionWithPrototype = description.ownKeys.has("prototype");
+    if (functionWithPrototype) base = functionDefinition;
+    return this.#createRemoteProxy(data, base, {
       getPrototypeOf(_target: unknown): {} | null {
         return description.prototype;
       },
@@ -493,7 +496,8 @@ export class ObjectStore {
       ownKeys(_target: unknown): (string | symbol)[] {
         return [...description.ownKeys.keys()];
       },
-      getOwnPropertyDescriptor(_target: unknown, property: string | symbol): { configurable: true, enumerable: boolean; } | undefined {
+      getOwnPropertyDescriptor(_target: unknown, property: string | symbol): { configurable: boolean, enumerable: boolean; writable?: boolean; } | undefined {
+        if (functionWithPrototype && property === "prototype") return { configurable: false, enumerable: false, writable: true };
         return description.ownKeys.get(property);
       },
     });
@@ -929,9 +933,16 @@ const undefinedDescription: UndefinedDescription = { type: "undefined" };
 const nullDescription: NullDescription = { type: "null" };
 
 /**
- * An function used for Proxies.
+ * A callable used for Proxies.
  */
-const functionDefinition: Function = new Function();
+/* istanbul ignore next */
+const callableDefinition: Function = () => { };
+
+/**
+ * A Function used for Proxies.
+ */
+/* istanbul ignore next */
+const functionDefinition: Function = function () { };
 
 /**
  * Definition of all unsupported handlers.

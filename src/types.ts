@@ -112,14 +112,14 @@ export type RemoteObj<T extends {}> = {
  * Makes it possible to await an object.
  * @public
  */
-export type RemoteObjPromise<T extends {}> = RemoteObj<T> & Promise<RemoteObj<T>>;
+export type RemoteObjPromise<T extends {}> = RemoteObj<T> & Promise<RemoteObj<T>> | RemoteObj<T>;
 
 /**
  * Is mapping a Function from the Remote to how the types are represented locally.
  * @public
  */
 export type RemoteFunction<T extends (...args: any[]) => any> =
-  T extends (...args: infer Parameters) => infer ReturnType ? (...args: RemoteFunctionParameters<Parameters>) => RemoteReturnType<ReturnType> :
+  T extends (...args: infer Parameters) => infer ReturnType ? RemoteObj<T> & ((...args: RemoteFunctionParameters<Parameters>) => RemoteReturnType<ReturnType>) :
   never;
 
 /**
@@ -133,7 +133,7 @@ export type RemoteFunctionPromise<T extends (...args: any[]) => any> = RemoteFun
  * @public
  */
 export type RemoteConstructor<T extends new () => any> =
-  T extends new (...args: infer Parameters) => infer ReturnType ? new (...args: RemoteFunctionParameters<Parameters>) => RemoteReturnType<ReturnType> :
+  T extends new (...args: infer Parameters) => infer ReturnType ? RemoteObj<T> & (new (...args: RemoteFunctionParameters<Parameters>) => RemoteReturnType<ReturnType>) :
   never;
 
 /**
