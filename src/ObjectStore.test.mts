@@ -451,6 +451,19 @@ describe('RequestHandler.ts', () => {
           (a as any) = undefined;
         }
       });
+      test("remote value should be garbage collected when no longer in use", async () => {
+        let weakRef: WeakRef<{}> | undefined;
+        const api = { test() { const o = {}; weakRef = new WeakRef(o); return o; } };
+        const [remote, local] = getObjectStorePair();
+        remote.exposeRemoteObject("test", api);
+        const a = local.getRemoteObject<typeof api>("test");
+        let o = await a.test();
+        await setTimeout(500);
+        expect(weakRef?.deref()).not.toEqual(undefined);
+        (o as any) = undefined;
+        await doGc();
+        expect(weakRef?.deref()).toEqual(undefined);
+      });
       // Unsupported Proxy Handlers
       test("getProtypeOf should fail", async () => {
         const api = {};

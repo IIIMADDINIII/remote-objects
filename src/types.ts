@@ -69,6 +69,42 @@ export interface ObjectStoreOptions {
    * @default false
    */
   noToString?: boolean;
+  /**
+   * Defines that no gc Synchronisation should happen.
+   *  - true:
+   *      All Objects shared with remote are never released (memory leak).
+   *      Calling syncGc will throw an Error.
+   *      SyncGc will never be scheduled.
+   *  - false:
+   *      syncGc will be automatically called based on scheduleGcAfterTime and scheduleGcAfterObjectCount.
+   *      Also calling syncGc manually is an option.
+   *      Objects Shared with remote will eventually get garbage collected.
+   * @default false
+   */
+  doNotSyncGc?: boolean;
+  /**
+   * Amount of time in milliseconds after syncGc is automatically scheduled again.
+   * Value of 0 means never.
+   * @default 30000
+   */
+  scheduleGcAfterTime?: number;
+  /**
+   * Number of Garbage Collected Objects after a syncGc should be scheduled.
+   * Value of 0 means never.
+   * @default 200
+   */
+  scheduleGcAfterObjectCount?: number;
+  /**
+   * Amount of expected network latency in milliseconds.
+   * This is needed to fix GarbageCollection is a request was lost or faulty.
+   * This does not include processing time of the Request itself.
+   * It is the maximum amount of time to send and receive a message from remote.
+   * If a Message exceeds this Time the corresponding objects might get Garbage Collected even if there are used by remote.
+   * Plan a healthy amount of reserve.
+   * If many Objects a created, this delays when they are checked.
+   * @default 5000
+   */
+  requestLatency?: number;
 }
 
 /**
@@ -347,6 +383,18 @@ export type ValueResponseDescription = {
   type: "response";
   gcObjects: GcObjectsDescription;
   value: ResponseValueDescription;
+};
+
+export type SyncGcRequest = {
+  type: "syncGcRequest";
+  deletedItems: number[];
+  newItems: number[];
+};
+
+export type SyncGcResponse = {
+  type: "syncGcResponse";
+  deletedItems: number[];
+  unknownNewItems: number[];
 };
 
 export type GcIdDescription = {

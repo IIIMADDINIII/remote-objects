@@ -27,6 +27,8 @@ import type {
   ResponseValueDescription,
   RootPathSegment,
   SymbolDescription,
+  SyncGcRequest,
+  SyncGcResponse,
   UndefinedDescription,
   ValueDescription,
   ValueRequestDescription,
@@ -70,9 +72,9 @@ export class ObjectStore {
    */
   #descFromLocalId: Map<GcId, GcIdDescription> = new Map();
   /**
-   * Keeps track of the newly generated GcIds and when this happened.
+   * Keeps track of the newly generated GcIds.
    */
-  #newLocalIds: Map<number, number> = new Map();
+  #newLocalIds: Map<number, GcIdDescription> = new Map();
   /**
    * List of all Objects (Symbol | {}) wich where received by the Remote with a number id.
    * Is Mapping from an Remote Id to a WeakReference of Promise of the Value.
@@ -99,6 +101,19 @@ export class ObjectStore {
    * Will call a Callback to do cleanup.
    */
   #finalizationReg: FinalizationRegistry<number>;
+  /**
+   * Timer id used for GC Sync calls.
+   */
+  #syncGcTimer: number | undefined = undefined;
+  /**
+   * Remembers, if syncGc was Scheduled for immediate execution.
+   * Prevents recreating timers all the time.
+   */
+  #syncGcScheduled: boolean = false;
+  /**
+   * Prevents two syncGc Calls to be active at once.
+   */
+  #syncGcBusy: boolean = false;
 
   /**
    * Creates a new ObjectStore.
@@ -110,6 +125,10 @@ export class ObjectStore {
       remoteObjectPrototype: "full",
       remoteError: "newError",
       noToString: false,
+      doNotSyncGc: false,
+      scheduleGcAfterTime: 30000,
+      scheduleGcAfterObjectCount: 200,
+      requestLatency: 5000,
       ...options
     };
     this.#requestHandler = requestHandler;
@@ -117,7 +136,12 @@ export class ObjectStore {
     if (requestHandler.setRequestHandler) requestHandler.setRequestHandler(this.requestHandler);
     this.disconnectedHandler = this.disconnectedHandler.bind(this);
     if (requestHandler.setDisconnectedHandler) requestHandler.setDisconnectedHandler(this.disconnectedHandler);
-    this.#finalizationReg = new FinalizationRegistry((id) => this.#cleanupObject(id));
+    this.syncGc = this.syncGc.bind(this);
+    if (options.doNotSyncGc) { this.#finalizationReg = dummyFinalizationRegistry(); }
+    else {
+      this.#finalizationReg = new FinalizationRegistry((id) => this.#cleanupObject(id));
+      if (this.#options.scheduleGcAfterTime !== 0) this.#syncGcTimer = setTimeout(this.syncGc, this.#options.scheduleGcAfterTime);
+    }
   }
 
   /**
@@ -212,9 +236,132 @@ export class ObjectStore {
     switch (request["type"]) {
       case "close": return this.close(), "";
       case "request": return await this.#requestValueHandler(<ValueRequestDescription>request);
+      case "syncGcRequest": return await this.#syncGcHandler(<SyncGcRequest>request);
       default: throw new Error("request is not a message from Remote ObjectStore because it has a unknown value in the type field.");
     }
   };
+
+  /**
+   * Synchronizes current GC State with remote.
+   * @public
+   */
+  syncGc(): void {
+    this.#checkClosed();
+    if (this.#options.doNotSyncGc) throw new Error("Can not syncGc if option doNotSyncGc is true.");
+    if (this.#syncGcBusy) return;
+    this.#syncGcBusy = true;
+    if (this.#syncGcTimer !== undefined) clearTimeout(this.#syncGcTimer);
+    this.#syncGcTimer = undefined;
+    this.#internalSyncGc().then(() => {
+      this.#syncGcBusy = false;
+      this.#syncGcScheduled = false;
+      if (this.#options.scheduleGcAfterTime !== 0) this.#syncGcTimer = setTimeout(this.syncGc, this.#options.scheduleGcAfterTime);
+    });
+  }
+
+  /**
+   * Handles a syncGc Message from remote and will delete References accordingly.
+   * Will also report, if newItems are known or not.
+   * @param request - Request from Remote.
+   * @returns response object with a list of all successfully deleted ids and all unknown ids.
+   */
+  async #syncGcHandler(request: SyncGcRequest): Promise<SyncGcResponse> {
+    const deletedItems: number[] = [];
+    const refTime = performance.now() - (this.#options.requestLatency / 1000.0);
+    // Delete deletedItems, if is was not send recently
+    for (const item of request.deletedItems) {
+      const description = this.#descFromLocalId.get(item);
+      if (description === undefined) {
+        // Object was already gone
+        this.#newLocalIds.delete(item);
+        deletedItems.push(item);
+        continue;
+      }
+      // Check if object was send recently
+      if (description.time >= refTime) continue;
+      // if Object was not send Recently => delete it
+      this.#newLocalIds.delete(item);
+      this.#descFromLocalId.delete(item);
+      this.#descFromLocalValue.delete(description.value);
+      deletedItems.push(item);
+    }
+    const unknownNewItems: number[] = [];
+    // Check if remote id is Known
+    for (const item of request.newItems) {
+      // if Item is not cached and not in Garbage Collection Que, then it is currently unknown
+      if (!this.#valueFromRemoteNumberId.has(item) && !this.#deletedRemoteIds.has(item)) {
+        unknownNewItems.push(item);
+      }
+    }
+    return {
+      type: "syncGcResponse",
+      deletedItems,
+      unknownNewItems,
+    };
+  }
+
+  /**
+   * Does the real computation an sending the Request for GcSync.
+   */
+  async #internalSyncGc(): Promise<void> {
+    try {
+      const newItems: Map<number, number> = new Map();
+      const refTime = performance.now() - (this.#options.requestLatency / 1000.0);
+      for (const [key, description] of this.#newLocalIds.entries()) {
+        // Just created objects might not have arrived at remote so don't send them
+        if (description.time >= refTime) continue;
+        newItems.set(key, description.time);
+      }
+      const request: SyncGcRequest = {
+        type: "syncGcRequest",
+        deletedItems: [...this.#deletedRemoteIds.keys()],
+        newItems: [...newItems.keys()]
+      };
+      const response = await this.#requestHandler.request(request) as SyncGcResponse;
+      // Updating list of deleted remote Ids.
+      for (const item of response.deletedItems) {
+        this.#deletedRemoteIds.delete(item);
+      }
+      // Calculate if an Object needs to be removed, because it was not received from remote
+      for (const [key, time] of newItems.entries()) {
+        // Check if item is known by remote
+        if (!response.unknownNewItems.includes(key)) {
+          // Item was successfully received by remote.
+          this.#newLocalIds.delete(key);
+        } else {
+          // Item was never or is no longer known at remote
+          const desc = this.#descFromLocalId.get(key);
+          if (desc === undefined) {
+            // was garbage collected in the meantime, so it was no longer known by remote
+            // Safe to Remove Item
+            this.#newLocalIds.delete(key);
+          } else {
+            // Was not garbage collected in the meantime, so was never known by remote
+            if (desc.time === time) {
+              // Object was not changed/resend during syncGc
+              // This object should be removed
+              this.#newLocalIds.delete(key);
+              this.#descFromLocalId.delete(key);
+              this.#descFromLocalValue.delete(desc.value);
+            } else {
+              // Object was changed/resend during syncGc
+              // It should be checked later again
+            }
+          }
+        }
+      }
+    } catch { }
+  }
+
+  /**
+   * Resets the timer to 0 ms so syncGc is executed as early as possible; 
+   */
+  #scheduleSyncGcImmediate() {
+    if (this.#syncGcScheduled || this.#syncGcBusy) return;
+    if (this.#syncGcTimer !== undefined) clearTimeout(this.#syncGcTimer);
+    this.#syncGcScheduled = true;
+    this.#syncGcTimer = setTimeout(this.syncGc, 0);
+  }
 
   /**
    * Handles a Value Request.
@@ -737,16 +884,16 @@ export class ObjectStore {
    */
   #getLocalIdFromValue(value: symbol | object): GcId {
     let description = this.#descFromLocalValue.get(value);
-    if (description !== undefined) {
+    if (description !== undefined && this.#descFromLocalId.has(description.id)) {
       description.time = performance.now();
       return description.id;
     }
     const id = this.#nextId();
     const time = performance.now();
-    this.#newLocalIds.set(id, time);
     description = { id, time, value };
     this.#descFromLocalValue.set(value, description);
     this.#descFromLocalId.set(id, description);
+    if (!this.#options.doNotSyncGc) this.#newLocalIds.set(id, description);
     return description.id;
   }
 
@@ -835,7 +982,9 @@ export class ObjectStore {
    * @param id - the id of the object wich was garbage collected.
    */
   #cleanupObject(id: number): void {
+    if (this.#options.doNotSyncGc) return;
     this.#deletedRemoteIds.add(id);
+    if (this.#options.scheduleGcAfterObjectCount !== 0 && this.#deletedRemoteIds.size >= this.#options.scheduleGcAfterObjectCount) this.#scheduleSyncGcImmediate();
     this.#valueFromRemoteNumberId.delete(id);
   }
 
@@ -979,3 +1128,15 @@ const UnsupportedHandlers: ProxyHandler<{}> = {
     return false;
   },
 };
+
+/**
+ * Generates the Interface of an Finalization Registry without any functionality.
+ * @returns A dummy implementation of the Finalization Registry wich does nothing.
+ */
+function dummyFinalizationRegistry(): FinalizationRegistry<number> {
+  return {
+    [Symbol.toStringTag]: "FinalizationRegistry",
+    register(_target: WeakKey, _heldValue: number, _unregisterToken?: WeakKey): void { },
+    unregister(_unregisterToken: WeakKey): void { },
+  };
+}
