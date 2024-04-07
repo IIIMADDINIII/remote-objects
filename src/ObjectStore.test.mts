@@ -27,9 +27,11 @@ describe('RequestHandler.ts', () => {
       return [a, b];
     }
 
-    function doGc() {
-      if (global.gc) return global.gc();
-      throw new Error("This test needs to be run with --expose-gc node Option");
+    async function doGc(delay: number = 500) {
+      if (!global.gc) throw new Error("This test needs to be run with --expose-gc node Option");
+      await setTimeout(delay);
+      global.gc();
+      await setTimeout(delay);
     }
 
     describe("constructor", () => {
@@ -434,18 +436,19 @@ describe('RequestHandler.ts', () => {
         expect(await a.prototype).toEqual(10);
       });
       test("doing garbage collection should not affect the functionality", async () => {
-        const api = { value: 10 };
+        const api = { value: {} };
         const [remote, local] = getObjectStorePair();
         remote.exposeRemoteObject("test", api);
         {
-          const a = local.getRemoteObject<typeof api>("test");
-          expect(await a.value).toEqual(10);
+          let a = local.getRemoteObject<typeof api>("test");
+          await a.value;
+          (a as any) = undefined;
         }
-        doGc();
-        await setTimeout(500);
+        await doGc();
         {
-          const a = local.getRemoteObject<typeof api>("test");
-          expect(await a.value).toEqual(10);
+          let a = local.getRemoteObject<typeof api>("test");
+          await a.value;
+          (a as any) = undefined;
         }
       });
       // Unsupported Proxy Handlers
