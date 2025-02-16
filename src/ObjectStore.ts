@@ -80,7 +80,7 @@ export class ObjectStore {
    * Is Mapping from an Remote Id to a WeakReference of Promise of the Value.
    * We want the value to get be Garbage Collected, if no longer used.
    */
-  #valueFromRemoteNumberId: Map<number, WeakRef<Promise<object | symbol>>> = new Map();
+  #valueFromRemoteNumberId: Map<number, Promise<WeakRef<object | symbol>>> = new Map();
   /**
    * List of all Objects (Symbol | {}) wich where received by the Remote with a string id.
    * Is Mapping from an Remote Id to a Promise of the Value.
@@ -219,6 +219,8 @@ export class ObjectStore {
     this.#valueFromRemoteNumberId.clear();
     this.#newLocalIds.clear();
     this.#descFromLocalId.clear();
+    if (this.#syncGcTimer !== undefined) clearTimeout(this.#syncGcTimer);
+    this.#syncGcTimer = undefined;
     if (this.#requestHandler.disconnectedHandler) this.#requestHandler.disconnectedHandler();
   };
 
@@ -374,6 +376,7 @@ export class ObjectStore {
     // Hold on to the Values, for the duration of the request to ensure they are not garbage collected before they are used.
     gcValues;
     const gcObjects: GcObjectsDescription = [];
+    // ToDo: Deduplicate gcObjects
     return { type: "response", value: await this.#describePromise(value, gcObjects), gcObjects };
   }
 
@@ -385,23 +388,14 @@ export class ObjectStore {
    */
   #pregenerateGcValue(description: GcObjectDescription): Promise<{} | symbol> {
     const id = description.id;
-    const stringId = typeof id === "string";
-    let oldValue = undefined;
-    if (stringId) {
-      oldValue = this.#valueFromRemoteStringId.get(id);
-    } else {
-      const cache = this.#valueFromRemoteNumberId.get(id);
-      if (cache !== undefined) {
-        oldValue = cache.deref();
-      }
-      this.#deletedRemoteIds.delete(id);
-    }
-    const value = this.#createGcValue(description, oldValue);
-    if (stringId) {
+    const value = this.#createGcValue(description, id);
+    if (typeof id === "string") {
       this.#valueFromRemoteStringId.set(id, value);
     } else {
-      this.#valueFromRemoteNumberId.set(id, new WeakRef(value));
-      this.#finalizationReg.register(value, id);
+      this.#valueFromRemoteNumberId.set(id, value.then((value) => {
+        this.#finalizationReg.register(value, id);
+        return new WeakRef(value);
+      }));
     }
     return value;
   }
@@ -517,7 +511,7 @@ export class ObjectStore {
     } else {
       const cache = this.#valueFromRemoteNumberId.get(id);
       if (cache !== undefined) {
-        const value = cache.deref();
+        const value = (await cache).deref();
         if (value !== undefined) return value;
       }
     }
@@ -529,15 +523,21 @@ export class ObjectStore {
    * @param description - description of the Value to create.
    * @returns Promise of the Value.
    */
-  async #createGcValue(description: GcObjectDescription, oldValue: Promise<symbol | {}> | undefined): Promise<symbol | {}> {
-    let old = undefined;
-    try {
-      old = await oldValue;
-    } catch { }
+  async #createGcValue(description: GcObjectDescription, id: GcId): Promise<symbol | {}> {
+    let oldValue = undefined;
+    if (typeof id === "string") {
+      oldValue = await this.#valueFromRemoteStringId.get(id);
+    } else {
+      const cache = this.#valueFromRemoteNumberId.get(id);
+      if (cache !== undefined) {
+        oldValue = (await cache).deref();
+      }
+      this.#deletedRemoteIds.delete(id);
+    }
     switch (description.type) {
-      case "symbol": return this.#createSymbolValue(description, old);
-      case "object": return this.#createObjectValue(description, old);
-      case "function": return this.#createFunctionValue(description, old);
+      case "symbol": return this.#createSymbolValue(description, oldValue);
+      case "object": return this.#createObjectValue(description, oldValue);
+      case "function": return this.#createFunctionValue(description, oldValue);
     }
   }
 
@@ -688,6 +688,7 @@ export class ObjectStore {
    */
   #describeValueRequest(remotePath: RemotePath): ValueRequestDescription {
     const gcObjects: GcObjectsDescription = [];
+    // ToDo: Deduplicate gcObjects
     return { ...this.#describeRemoteValuePath(remotePath, gcObjects), type: "request", gcObjects, };
   }
 

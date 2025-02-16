@@ -246,160 +246,547 @@ export type RemotePrimitiveReadonly<T extends Primitives> = PromiseLike<T>;
  */
 export type Primitives = string | number | boolean | null | undefined | void | bigint | symbol;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+/**
+ * Object which may have a Symbol.
+ */
 export type MayHaveSymbol<T> = {
+  /**
+   * Index signature to show that an Object may have a Symbol as a Key.
+   */
   [key: symbol]: T | undefined;
 };
 
+/**
+ * All Possible types for an object Key (string or symbol).
+ */
 export type Key = string | symbol;
 
-type CallPathSegment = { type: "call"; args: unknown[]; parent: ExtendableRemotePath; };
-type NewPathSegment = { type: "new"; args: unknown[]; parent: ExtendableRemotePath; };
-type GetPathSegment = { type: "get"; name: Key; parent: ExtendableRemotePath; };
-type SetPathSegment = { type: "set"; name: Key; value: unknown; parent: ExtendableRemotePath; };
-export type RootPathSegment = { type: "root"; id: GcId; description?: ResolvedObjectDescription | ResolvedFunctionDescription; };
+/**
+ * Path segment representing the call of an function.
+ */
+type CallPathSegment = {
+  /**
+   * Type of the Segment.
+   */
+  type: "call";
+  /**
+   * List of all the Arguments to this function call.
+   */
+  args: unknown[];
+  /**
+   * Parent Segment wich is getting called.
+   * Probably value referencing a function.
+   */
+  parent: ExtendableRemotePath;
+};
 
+/**
+ * Path segment representing the creation of an object.
+ */
+type NewPathSegment = {
+  /**
+   * Type of the Segment.
+   */
+  type: "new";
+  /**
+   * list of Arguments to the constructor.
+   */
+  args: unknown[];
+  /**
+   * Parent Segment wich is getting called.
+   * Probably value referencing a constructor.
+   */
+  parent: ExtendableRemotePath;
+};
 
+/**
+ * Path segment representing reading of an property.
+ */
+type GetPathSegment = {
+  /**
+   * Type of the Segment.
+   */
+  type: "get";
+  /**
+   * Name of the property to read.
+   */
+  name: Key;
+  /**
+   * Parent Segment representing an object.
+   */
+  parent: ExtendableRemotePath;
+};
+
+/**
+ * Path segment representing the Assignment of an property.
+ */
+type SetPathSegment = {
+  /**
+   * Type of the Segment.
+   */
+  type: "set";
+  /**
+   * Name of the Property to set.
+   */
+  name: Key;
+  /**
+   * Value to assign to the property.
+   */
+  value: unknown;
+  /**
+   * Parent Segment representing an object.
+   */
+  parent: ExtendableRemotePath;
+};
+
+/**
+ * The Root of all RemotePaths. The top most Parent always needs to be a RootPathSegment.
+ */
+export type RootPathSegment = {
+  /**
+   * Type of the Segment.
+   */
+  type: "root";
+  /**
+   * Remote Id of the Remote Object.
+   */
+  id: GcId;
+  /**
+   * Description of the Remote Object, to support stuff like hasKey.
+   */
+  description?: ResolvedObjectDescription | ResolvedFunctionDescription;
+};
+
+/**
+ * All Path Segments which can be extended (Can be the Parent of an ExtendingRemotePath; currently everything except SetPathSegment).
+ */
 export type ExtendableRemotePath = RootPathSegment | GetPathSegment | NewPathSegment | CallPathSegment;
+
+/**
+ * All Path Segments which are based on a Parent segment (Every Segment type except RootPathSegment).
+ */
 export type ExtendingRemotePath = GetPathSegment | NewPathSegment | CallPathSegment | SetPathSegment;
+
+/**
+ * Description of a remote Path (Object + some operations).
+ */
 export type RemotePath = ExtendableRemotePath | SetPathSegment;
 
-
-
+/**
+ * JSON save Id of an object which might need to be garbage collected.
+ */
 export type GcId = string | number;
-export type LocalGcId = { type: "local", id: GcId; };
-export type RemoteGcId = { type: "remote", } & RemoteDescription;
-export type RemoteDescription = { id: GcId; path?: ValuePath; };
+
+/**
+ * JSON save Id of an object wich is locally available.
+ */
+export type LocalGcId = {
+  /**
+   * Type of the GcId ("local" | "remote").
+   */
+  type: "local";
+  /**
+   * Id of the local object.
+   */
+  id: GcId;
+};
+
+/**
+ * JSON save Id of an object wich only available on the remote site.
+ */
+export type RemoteGcId = RemoteDescription & {
+  /**
+   * Type of the GcId ("local" | "remote").
+   */
+  type: "remote";
+};
+
+/**
+ * JSON save Description of an object on the remote site.
+ */
+export type RemoteDescription = {
+  /**
+   * Id of the Remote Object.
+   */
+  id: GcId;
+  /**
+   * Optional path to follow based on the remote object.
+   */
+  path?: ValuePath;
+};
+
+/**
+ * JSON save An GcId with the location of the object specified.
+ */
 export type LocalizedGcId = LocalGcId | RemoteGcId;
 
+/**
+ * JSON save Description of a key of an object.
+ */
 export type KeyDescription = string | LocalizedGcId;
 
-type ValueCallSegment = { type: "call"; args: ValueDescription[]; };
-type ValueNewSegment = { type: "new"; args: ValueDescription[]; };
-type ValueGetSegment = { type: "get"; name: KeyDescription; };
-type ValueSetSegment = { type: "set"; name: KeyDescription; value: ValueDescription; };
+/**
+ * JSON save Value Segment representing the call of an function.
+ */
+type ValueCallSegment = {
+  /**
+   * Type of the Segment.
+   */
+  type: "call";
+  /**
+   * Description of all the Arguments for the function call.
+   */
+  args: ValueDescription[];
+};
+
+/**
+ * JSON save Value Segment representing the Creation of an object.
+ */
+type ValueNewSegment = {
+  /**
+   * Type of the Segment.
+   */
+  type: "new";
+  /**
+   * Description of all the arguments to the constructor call.
+   */
+  args: ValueDescription[];
+};
+
+/**
+ * JSON save Value Segment representing the reading of an property.
+ */
+type ValueGetSegment = {
+  /**
+   * Type of the Segment.
+   */
+  type: "get";
+  /**
+   * Description of the Key to read the value from.
+   */
+  name: KeyDescription;
+};
+
+/**
+ * JSON save Value Segment representing the setting of an property.
+ */
+type ValueSetSegment = {
+  /**
+   * Type of the Segment.
+   */
+  type: "set";
+  /**
+   * Description of the Key to read the value from.
+   */
+  name: KeyDescription;
+  /**
+   * Description of the Value to assign to the property.
+   */
+  value: ValueDescription;
+};
+
+/**
+ * JSON save Segment of the Value Path.
+ */
 export type ValueSegment = ValueGetSegment | ValueCallSegment | ValueNewSegment | ValueSetSegment;
+
+/**
+ * JSON save Description of an indirect remote value.
+ */
 export type ValuePath = ValueSegment[];
 
+/**
+ * JSON save description of a BigInt.
+ */
+type BigIntDescription = {
+  /**
+   * Type of the ValueDescription.
+   */
+  type: "bigint";
+  /**
+   * Value of the BigInt represented as a string.
+   */
+  value: string;
+};
 
+/**
+ * JSON save description of the Value undefined.
+ */
+export type UndefinedDescription = {
+  /**
+   * Type of the ValueDescription.
+   */
+  type: "undefined";
+};
 
-type BigIntDescription = { type: "bigint"; value: string; };
-export type UndefinedDescription = { type: "undefined"; };
-export type NullDescription = { type: "null"; };
+/**
+ * JSON save description of the Value null.
+ */
+export type NullDescription = {
+  /**
+   * Type of the ValueDescription.
+   */
+  type: "null";
+};
+
+/**
+ * JSON save description of all Primitive Values.
+ */
 type PrimitiveValueDescription = string | number | boolean | BigIntDescription | UndefinedDescription | NullDescription;
 
+/**
+ * JSON save description of own Keys
+ */
 export type OwnKeyDescription = {
+  /**
+   * Description of the Key itself.
+   */
   key: KeyDescription;
+  /**
+   * Is the Key enumerable?
+   */
   enumerable: boolean;
 };
 
+/**
+ * JSON save description of an Object.
+ */
 export type ObjectDescription = {
-  id: GcId;
+  /**
+   * Type of the ValueDescription.
+   */
   type: "object";
+  /**
+   * GcId of this Object.
+   */
+  id: GcId;
+  /**
+   * List of Own Keys Descriptions of the object (To Support stuff like ownKey).
+   */
   ownKeys: OwnKeyDescription[];
+  /**
+   * List of all Keys Descriptions in the prototype chain (To support stuff like hasKey; Empty list if Prototype is not NullDescription).
+   */
   hasKeys: KeyDescription[];
+  /**
+   * Description of the Prototype of the object.
+   */
   prototype: LocalizedGcId | NullDescription;
 };
 
+/**
+ * Type for caching the evaluated Object Description.
+ */
 export type ResolvedObjectDescription = {
+  /**
+   * Map of all the Own Keys with its parameters.
+   */
   ownKeys: Map<Key, { configurable: true, enumerable: boolean; }>;
+  /**
+   * List of all the Keys wich exist on the object (empty list if Prototype is not Null).
+   */
   hasKeys: Key[];
+  /**
+   * Prototype of the Object. Null when it does not exist.
+   */
   prototype: {} | null;
 };
 
+/**
+ * JSON save description of an Function.
+ */
 export type FunctionDescription = {
-  id: GcId;
+  /**
+   * Type of the ValueDescription.
+   */
   type: "function";
+  /**
+   * GcId of this function.
+   */
+  id: GcId;
+  /**
+   * List of Own Keys Descriptions of the object (To Support stuff like ownKey).
+   */
   ownKeys: OwnKeyDescription[];
+  /**
+   * List of all Keys Descriptions in the prototype chain (To support stuff like hasKey; Empty list if Prototype is not NullDescription).
+   */
   hasKeys: KeyDescription[];
+  /**
+   * Description of the Prototype of the object.
+   */
   prototype: LocalizedGcId | NullDescription;
+  /**
+   * Description of the Prototype property of the function (to support instanceof).
+   */
   functionPrototype: ValueDescription;
 };
 
+/**
+ * Type for caching the evaluated Function Description.
+ */
 export type ResolvedFunctionDescription = {
+  /**
+   * Map of all the Own Keys with its parameters.
+   */
   ownKeys: Map<Key, { configurable: true, enumerable: boolean; }>;
+  /**
+   * List of all the Keys wich exist on the function (empty list if Prototype is not Null).
+   */
   hasKeys: Key[];
+  /**
+   * Prototype of the function. Null when it does not exist.
+   */
   prototype: {} | null;
+  /**
+   * Prototype property of the function.
+   */
   functionPrototype: unknown;
 };
 
+/**
+ * JSON save description of a symbol. Symbols are represented by a new symbol on the remote site.
+ */
 export type SymbolDescription = {
-  id: GcId;
+  /**
+   * Type of the ValueDescription.
+   */
   type: "symbol";
+  /**
+   * Id of the symbol.
+   */
+  id: GcId;
 };
 
+/**
+ * JSON save Description of an Object, function or symbol.
+ */
 export type GcObjectDescription = ObjectDescription | FunctionDescription | SymbolDescription;
+
+/**
+ * JSON save Description of a list of objects, functions and symbols.
+ */
 export type GcObjectsDescription = GcObjectDescription[];
 
+/**
+ * JSON save description of an any Value.
+ */
 export type ValueDescription = PrimitiveValueDescription | LocalizedGcId;
 
-export type ErrorDescription = { type: "error"; value: ValueDescription; message?: string; stack?: string; name?: string; };
+/**
+ * JSON save description of an error.
+ */
+export type ErrorDescription = {
+  /**
+   * Type of the ValueDescription.
+   */
+  type: "error";
+  /**
+   * Description of the Error Value.
+   */
+  value: ValueDescription;
+  /**
+   * Message of the error if it exists.
+   */
+  message?: string;
+  /**
+   * Call Stack of the Error if it exists.
+   */
+  stack?: string;
+  /**
+   * Name of the Error if it exists.
+   */
+  name?: string;
+};
+
+/**
+ * JSON save description of the response Value.
+ */
 export type ResponseValueDescription = ValueDescription | ErrorDescription;
 
-export type ValueRequestDescription = {
+/**
+ * Value Request, describing the remote value.
+ */
+export type ValueRequestDescription = RemoteDescription & {
+  /**
+   * Type of the Request.
+   */
   type: "request";
+  /**
+   * List of garbage collected objects important for this request.
+   */
   gcObjects: GcObjectsDescription;
-} & RemoteDescription;
+};
 
+/**
+ * Response to a Value Request.
+ */
 export type ValueResponseDescription = {
+  /**
+   * Type of the Response.
+   */
   type: "response";
+  /**
+   * List of garbage collected objects important for this response.
+   */
   gcObjects: GcObjectsDescription;
+  /**
+   * Value of the Response.
+   */
   value: ResponseValueDescription;
 };
 
+/**
+ * Request to sync the Garbage collector status.
+ */
 export type SyncGcRequest = {
+  /**
+   * Type of the Request.
+   */
   type: "syncGcRequest";
+  /**
+   * List of RemoteObjects or Symbol ID's which where deleted since the last sync and can now be released locally.
+   */
   deletedItems: number[];
+  /**
+   * List of Items which are new since the last sync.
+   */
   newItems: number[];
 };
 
+/**
+ * Response to a garbage collector sync request.
+ */
 export type SyncGcResponse = {
+  /**
+   * Type of the Response.
+   */
   type: "syncGcResponse";
+  /**
+   * List of items which where successfully released.
+   */
   deletedItems: number[];
+  /**
+   * List of items which are still unknown.
+   */
   unknownNewItems: number[];
 };
 
+/**
+ * Metadata of an local Gc Item.
+ */
 export type GcIdDescription = {
+  /**
+   * Id ig the local gc item.
+   */
   id: GcId;
+  /**
+   * Last Time the local item was sent to remote.
+   */
   time: number;
+  /**
+   * The local Item.
+   */
   value: symbol | {};
 }
 

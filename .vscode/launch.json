@@ -23,7 +23,8 @@
         "${jest.testFile}"
       ],
       "runtimeArgs": [
-        "--experimental-vm-modules"
+        "--experimental-vm-modules",
+        "--expose-gc"
       ],
       "outputCapture": "std",
       "console": "internalConsole",
