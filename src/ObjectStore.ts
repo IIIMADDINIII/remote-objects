@@ -7,7 +7,7 @@ import type {
   GcId,
   GcIdDescription,
   GcObjectDescription,
-  GcObjectsDescription,
+  GcObjectMap,
   Key,
   KeyDescription,
   LocalGcId,
@@ -35,6 +35,7 @@ import type {
   ValueResponseDescription,
   ValueSegment
 } from "./types.js";
+import { testable } from "./util.js";
 
 /**
  * Class to handle object Caching and Translation of ObjectDescriptions to RemoteObjects.
@@ -60,6 +61,7 @@ export class ObjectStore {
   /**
    * Last id wich was generated, used to generate the next id.
    */
+  @testable
   #lastId: number = 0;
   /**
    * List of all Objects and Symbols wich where send to the Remote to.
@@ -100,7 +102,7 @@ export class ObjectStore {
    * Used for registering all values, wich might be garbage Collected.
    * Will call a Callback to do cleanup.
    */
-  #finalizationReg: FinalizationRegistry<number>;
+  #finalizationRegister: FinalizationRegistry<number>["register"];
   /**
    * Timer id used for GC Sync calls.
    */
@@ -137,9 +139,10 @@ export class ObjectStore {
     this.disconnectedHandler = this.disconnectedHandler.bind(this);
     if (requestHandler.setDisconnectedHandler) requestHandler.setDisconnectedHandler(this.disconnectedHandler);
     this.syncGc = this.syncGc.bind(this);
-    if (options.doNotSyncGc) { this.#finalizationReg = dummyFinalizationRegistry(); }
+    if (options.doNotSyncGc) { this.#finalizationRegister = () => { }; }
     else {
-      this.#finalizationReg = new FinalizationRegistry((id) => this.#cleanupObject(id));
+      const reg = new FinalizationRegistry<number>((id) => this.#cleanupObject(id));
+      this.#finalizationRegister = reg.register.bind(reg);
       if (this.#options.scheduleGcAfterTime !== 0) this.#syncGcTimer = setTimeout(this.syncGc, this.#options.scheduleGcAfterTime);
     }
   }
@@ -269,7 +272,7 @@ export class ObjectStore {
    */
   async #syncGcHandler(request: SyncGcRequest): Promise<SyncGcResponse> {
     const deletedItems: number[] = [];
-    const refTime = performance.now() - (this.#options.requestLatency / 1000.0);
+    const refTime = performance.now() - this.#options.requestLatency;
     // Delete deletedItems, if is was not send recently
     for (const item of request.deletedItems) {
       const description = this.#descFromLocalId.get(item);
@@ -308,7 +311,7 @@ export class ObjectStore {
   async #internalSyncGc(): Promise<void> {
     try {
       const newItems: Map<number, number> = new Map();
-      const refTime = performance.now() - (this.#options.requestLatency / 1000.0);
+      const refTime = performance.now() - this.#options.requestLatency;
       for (const [key, description] of this.#newLocalIds.entries()) {
         // Just created objects might not have arrived at remote so don't send them
         if (description.time >= refTime) continue;
@@ -375,9 +378,8 @@ export class ObjectStore {
     const value = this.#createLocalValue(request);
     // Hold on to the Values, for the duration of the request to ensure they are not garbage collected before they are used.
     gcValues;
-    const gcObjects: GcObjectsDescription = [];
-    // ToDo: Deduplicate gcObjects
-    return { type: "response", value: await this.#describePromise(value, gcObjects), gcObjects };
+    const gcObjects: GcObjectMap = new Map();
+    return { type: "response", value: await this.#describePromise(value, gcObjects), gcObjects: [...gcObjects.values()] };
   }
 
   /**
@@ -388,12 +390,20 @@ export class ObjectStore {
    */
   #pregenerateGcValue(description: GcObjectDescription): Promise<{} | symbol> {
     const id = description.id;
-    const value = this.#createGcValue(description, id);
-    if (typeof id === "string") {
+    const isString = typeof id === "string";
+    let old = undefined;
+    if (isString) {
+      old = this.#valueFromRemoteStringId.get(id);
+    } else {
+      old = this.#valueFromRemoteNumberId.get(id)?.then((value) => value.deref());
+      this.#deletedRemoteIds.delete(id);
+    }
+    const value = Promise.resolve().then(() => this.#createGcValue(description, old));
+    if (isString) {
       this.#valueFromRemoteStringId.set(id, value);
     } else {
       this.#valueFromRemoteNumberId.set(id, value.then((value) => {
-        this.#finalizationReg.register(value, id);
+        this.#finalizationRegister(value, id);
         return new WeakRef(value);
       }));
     }
@@ -523,21 +533,11 @@ export class ObjectStore {
    * @param description - description of the Value to create.
    * @returns Promise of the Value.
    */
-  async #createGcValue(description: GcObjectDescription, id: GcId): Promise<symbol | {}> {
-    let oldValue = undefined;
-    if (typeof id === "string") {
-      oldValue = await this.#valueFromRemoteStringId.get(id);
-    } else {
-      const cache = this.#valueFromRemoteNumberId.get(id);
-      if (cache !== undefined) {
-        oldValue = (await cache).deref();
-      }
-      this.#deletedRemoteIds.delete(id);
-    }
+  async #createGcValue(description: GcObjectDescription, old: Promise<symbol | {} | undefined> | undefined): Promise<symbol | {}> {
     switch (description.type) {
-      case "symbol": return this.#createSymbolValue(description, oldValue);
-      case "object": return this.#createObjectValue(description, oldValue);
-      case "function": return this.#createFunctionValue(description, oldValue);
+      case "symbol": return this.#createSymbolValue(description, await old);
+      case "object": return this.#createObjectValue(description, await old);
+      case "function": return this.#createFunctionValue(description, await old);
     }
   }
 
@@ -687,9 +687,8 @@ export class ObjectStore {
    * @returns the Description of the Request.
    */
   #describeValueRequest(remotePath: RemotePath): ValueRequestDescription {
-    const gcObjects: GcObjectsDescription = [];
-    // ToDo: Deduplicate gcObjects
-    return { ...this.#describeRemoteValuePath(remotePath, gcObjects), type: "request", gcObjects, };
+    const gcObjects: GcObjectMap = new Map();
+    return { ...this.#describeRemoteValuePath(remotePath, gcObjects), type: "request", gcObjects: [...gcObjects.values()] };
   }
 
   /**
@@ -698,7 +697,7 @@ export class ObjectStore {
    * @param promise - the Promise to await.
    * @returns the Description of the resolved value or rejected Error.
    */
-  async #describePromise(promise: Promise<unknown>, gcObjects: GcObjectsDescription): Promise<ResponseValueDescription> {
+  async #describePromise(promise: Promise<unknown>, gcObjects: GcObjectMap): Promise<ResponseValueDescription> {
     try {
       return this.#describeValue(await promise, gcObjects);
     } catch (error) {
@@ -719,7 +718,7 @@ export class ObjectStore {
    * @param gcObjects - Objects to send along.
    * @returns description of the path.
    */
-  #describeRemoteValuePath(remotePath: RemotePath, gcObjects: GcObjectsDescription): RemoteGcId {
+  #describeRemoteValuePath(remotePath: RemotePath, gcObjects: GcObjectMap): RemoteGcId {
     if (remotePath.type === "root") return { type: "remote", id: remotePath.id };
     const path: ExtendingRemotePath[] = [];
     while (remotePath.type !== "root") {
@@ -739,7 +738,7 @@ export class ObjectStore {
    * @param gcObjects - the Objects to send along.
    * @returns description of the Segment.
    */
-  #describePathSegment(pathSegment: ExtendingRemotePath, gcObjects: GcObjectsDescription): ValueSegment {
+  #describePathSegment(pathSegment: ExtendingRemotePath, gcObjects: GcObjectMap): ValueSegment {
     switch (pathSegment.type) {
       case "get": return { type: "get", name: this.#describeKey(pathSegment.name, gcObjects) };
       case "new": return { type: "new", args: this.#describeValues(pathSegment.args, gcObjects) };
@@ -754,7 +753,7 @@ export class ObjectStore {
    * @param gcObjects - the Objects to send along.
    * @returns the Description of the Key.
    */
-  #describeKey(key: Key, gcObjects: GcObjectsDescription): KeyDescription {
+  #describeKey(key: Key, gcObjects: GcObjectMap): KeyDescription {
     if (typeof key === "string") return key;
     return this.#describeSymbol(key, gcObjects);
   }
@@ -765,7 +764,7 @@ export class ObjectStore {
    * @param gcObjects - the Objects to send along.
    * @returns descriptions of the Values.
    */
-  #describeValues(values: unknown[], gcObjects: GcObjectsDescription): ValueDescription[] {
+  #describeValues(values: unknown[], gcObjects: GcObjectMap): ValueDescription[] {
     return values.map((v) => this.#describeValue(v, gcObjects));
   }
 
@@ -775,7 +774,7 @@ export class ObjectStore {
    * @param gcObjects - the Objects to send along.
    * @returns description of the value;
    */
-  #describeValue(value: unknown, gcObjects: GcObjectsDescription): ValueDescription {
+  #describeValue(value: unknown, gcObjects: GcObjectMap): ValueDescription {
     switch (typeof value) {
       case "string": return value;
       case "number": return value;
@@ -797,7 +796,7 @@ export class ObjectStore {
    * @param gcObjects - the Objects to send along.
    * @returns description of the Symbol.
    */
-  #describeSymbol(symbol: symbol, gcObjects: GcObjectsDescription): LocalizedGcId {
+  #describeSymbol(symbol: symbol, gcObjects: GcObjectMap): LocalizedGcId {
     const id = this.#remoteSymbolIds.get(symbol);
     if (id !== undefined) return { type: "remote", id };
     return { type: "local", id: this.#describeLocalSymbol(symbol, gcObjects) };
@@ -809,7 +808,7 @@ export class ObjectStore {
    * @param gcObjects - the Objects to send along.
    * @returns description of the Object.
    */
-  #describeObject(object: {} | null, gcObjects: GcObjectsDescription): LocalizedGcId | NullDescription {
+  #describeObject(object: {} | null, gcObjects: GcObjectMap): LocalizedGcId | NullDescription {
     if (object === null) return nullDescription;
     const proxyData = this.#getProxyData(object);
     if (proxyData !== undefined) return this.#describeRemoteValuePath(proxyData, gcObjects);
@@ -822,7 +821,7 @@ export class ObjectStore {
    * @param gcObjects - the Objects to send along.
    * @returns description of the Function.
    */
-  #describeFunction(fn: Function, gcObjects: GcObjectsDescription): ValueDescription {
+  #describeFunction(fn: Function, gcObjects: GcObjectMap): ValueDescription {
     const proxyData = this.#getProxyData(fn);
     if (proxyData !== undefined) return this.#describeRemoteValuePath(proxyData, gcObjects);
     return { type: "local", id: this.#describeLocalFunction(fn, gcObjects) };
@@ -834,7 +833,7 @@ export class ObjectStore {
    * @param gcObjects - the Objects to send along.
    * @returns description of the object.
    */
-  #describeLocalObject(localObject: {}, gcObjects: GcObjectsDescription): GcId {
+  #describeLocalObject(localObject: {}, gcObjects: GcObjectMap): GcId {
     const id = this.#getLocalIdFromValue(localObject);
     const ownKeys: OwnKeyDescription[] = Object.entries(Object.getOwnPropertyDescriptors(localObject))
       .map(([key, value]) => ({ key: this.#describeKey(key, gcObjects), enumerable: value.enumerable === true }));;
@@ -842,7 +841,7 @@ export class ObjectStore {
     if (this.#options.remoteObjectPrototype === "keysOnly") hasKeys = getAllKeys(localObject).map((key) => this.#describeKey(key, gcObjects));
     let prototype: LocalizedGcId | NullDescription = nullDescription;
     if (this.#options.remoteObjectPrototype === "full") prototype = this.#describeObject(Reflect.getPrototypeOf(localObject), gcObjects);
-    gcObjects.push({ type: "object", id, ownKeys, hasKeys, prototype });
+    gcObjects.set(id, { type: "object", id, ownKeys, hasKeys, prototype });
     return id;
   }
 
@@ -852,7 +851,7 @@ export class ObjectStore {
    * @param gcObjects - the Objects to send along.
    * @returns description of the Function.
    */
-  #describeLocalFunction(localFunction: Function, gcObjects: GcObjectsDescription): GcId {
+  #describeLocalFunction(localFunction: Function, gcObjects: GcObjectMap): GcId {
     const id = this.#getLocalIdFromValue(localFunction);
     const ownKeys: OwnKeyDescription[] = Object.entries(Object.getOwnPropertyDescriptors(localFunction))
       .map(([key, value]) => ({ key: this.#describeKey(key, gcObjects), enumerable: value.enumerable === true }));;
@@ -861,7 +860,7 @@ export class ObjectStore {
     let prototype: LocalizedGcId | NullDescription = nullDescription;
     if (this.#options.remoteObjectPrototype === "full") prototype = this.#describeObject(Reflect.getPrototypeOf(localFunction), gcObjects);
     const functionPrototype: ValueDescription = this.#describeValue(localFunction.prototype, gcObjects);
-    gcObjects.push({ type: "function", id, ownKeys, hasKeys, prototype, functionPrototype });
+    gcObjects.set(id, { type: "function", id, ownKeys, hasKeys, prototype, functionPrototype });
     return id;
   };
 
@@ -871,9 +870,9 @@ export class ObjectStore {
    * @param gcObjects - the Objects to send along.
    * @returns description of the Symbol.
    */
-  #describeLocalSymbol(symbol: symbol, gcObjects: GcObjectsDescription): GcId {
+  #describeLocalSymbol(symbol: symbol, gcObjects: GcObjectMap): GcId {
     const id = this.#getLocalIdFromValue(symbol);
-    gcObjects.push({ type: "symbol", id });
+    gcObjects.set(id, { type: "symbol", id });
     return id;
   }
 
@@ -983,7 +982,6 @@ export class ObjectStore {
    * @param id - the id of the object wich was garbage collected.
    */
   #cleanupObject(id: number): void {
-    if (this.#options.doNotSyncGc) return;
     this.#deletedRemoteIds.add(id);
     if (this.#options.scheduleGcAfterObjectCount !== 0 && this.#deletedRemoteIds.size >= this.#options.scheduleGcAfterObjectCount) this.#scheduleSyncGcImmediate();
     this.#valueFromRemoteNumberId.delete(id);
@@ -1129,15 +1127,3 @@ const UnsupportedHandlers: ProxyHandler<{}> = {
     return false;
   },
 };
-
-/**
- * Generates the Interface of an Finalization Registry without any functionality.
- * @returns A dummy implementation of the Finalization Registry wich does nothing.
- */
-function dummyFinalizationRegistry(): FinalizationRegistry<number> {
-  return {
-    [Symbol.toStringTag]: "FinalizationRegistry",
-    register(_target: WeakKey, _heldValue: number, _unregisterToken?: WeakKey): void { },
-    unregister(_unregisterToken: WeakKey): boolean { return true; },
-  };
-}

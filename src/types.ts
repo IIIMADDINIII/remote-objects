@@ -664,6 +664,11 @@ export type SymbolDescription = {
 export type GcObjectDescription = ObjectDescription | FunctionDescription | SymbolDescription;
 
 /**
+ * Map from GcId to the Object description with that id.
+ */
+export type GcObjectMap = Map<GcId, GcObjectDescription>;
+
+/**
  * JSON save Description of a list of objects, functions and symbols.
  */
 export type GcObjectsDescription = GcObjectDescription[];

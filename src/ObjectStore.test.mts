@@ -3,6 +3,7 @@ import { setTimeout } from "timers/promises";
 import type { RequestHandlerFunction } from "./Interfaces.js";
 import { ObjectStore, isProxy } from "./ObjectStore.js";
 import type { MayHaveSymbol, ObjectStoreOptions, Remote } from "./types.js";
+import { setTestable } from "./util.js";
 
 /* istanbul ignore next */
 describe('RequestHandler.ts', () => {
@@ -28,12 +29,15 @@ describe('RequestHandler.ts', () => {
       return [a, b];
     }
 
-    async function doGc(delay: number = 500) {
+    async function doGc(delay: number = 50) {
       if (!global.gc) throw new Error("This test needs to be run with --expose-gc node Option");
+      global.gc();
       await setTimeout(delay);
       global.gc();
       await setTimeout(delay);
     }
+
+    function use(_: unknown) { }
 
     describe("constructor", () => {
       test("should call setRequestHandler and ", () => {
@@ -108,6 +112,13 @@ describe('RequestHandler.ts', () => {
         expect(() => a + "").toThrow("Cannot convert object to primitive value");
         expect(isProxy((a as MayHaveSymbol<() => string>)[Symbol.toStringTag])).toEqual(true);
         expect(isProxy(a.toString)).toEqual(true);
+        os.close();
+      });
+      test("option 'doNotSync' should cause that sync messages do not happen", async () => {
+        const request = jest.fn(async () => { return {}; });
+        const os = new ObjectStore({ request }, { doNotSyncGc: true, scheduleGcAfterTime: 10 });
+        await setTimeout(100);
+        expect(request).toBeCalledTimes(0);
         os.close();
       });
     });
@@ -471,7 +482,7 @@ describe('RequestHandler.ts', () => {
       });
       test("doing garbage collection should not affect the functionality", async () => {
         const api = { value: {} };
-        const [remote, local] = getObjectStorePair();
+        const [remote, local] = getObjectStorePair({ scheduleGcAfterTime: 10, requestLatency: 5 });
         remote.exposeRemoteObject("test", api);
         {
           let a = local.getRemoteObject<typeof api>("test");
@@ -490,16 +501,73 @@ describe('RequestHandler.ts', () => {
         class Test1234 { }
         let weakRef: WeakRef<{}> | undefined;
         const api = { test() { const o = new Test1234(); weakRef = new WeakRef(o); return o; } };
-        const [remote, local] = getObjectStorePair({ scheduleGcAfterTime: 100 });
+        const [remote, local] = getObjectStorePair({ scheduleGcAfterTime: 10, requestLatency: 5 });
         remote.exposeRemoteObject("test", api);
         const a = local.getRemoteObject<typeof api>("test");
         let o: Remote<Test1234> | undefined = await a.test();
         await doGc();
         expect(weakRef?.deref()).not.toEqual(undefined);
-        o;
+        use(o);
         o = undefined;
         await doGc();
         expect(weakRef?.deref()).toEqual(undefined);
+        local.close();
+      });
+      test("syncGc is triggered early because of object count", async () => {
+        class Test1234 { }
+        let weakRef: WeakRef<{}> | undefined;
+        const api = { test() { const o = new Test1234(); weakRef = new WeakRef(o); return o; } };
+        const [remote, local] = getObjectStorePair({ scheduleGcAfterObjectCount: 3, scheduleGcAfterTime: 30000, requestLatency: 5 });
+        remote.exposeRemoteObject("test", api);
+        const a = local.getRemoteObject<typeof api>("test");
+        let o: unknown[] | undefined = await Promise.all([0, 1, 2].map(() => a.test()));
+        await doGc();
+        expect(weakRef?.deref()).not.toEqual(undefined);
+        o.length = 0;
+        await doGc();
+        expect(weakRef?.deref()).toEqual(undefined);
+        local.close();
+      });
+      test("Do Not garbage collect if it is in request Latency", async () => {
+        class Test1234 { }
+        let weakRef: WeakRef<{}> | undefined;
+        const api = { test() { const o = new Test1234(); weakRef = new WeakRef(o); return o; } };
+        const [remote, local] = getObjectStorePair({ scheduleGcAfterTime: 10, requestLatency: 500 });
+        remote.exposeRemoteObject("test", api);
+        const a = local.getRemoteObject<typeof api>("test");
+        let o: Remote<Test1234> | undefined = await a.test();
+        await doGc();
+        expect(weakRef?.deref()).not.toEqual(undefined);
+        use(o);
+        o = undefined;
+        await doGc();
+        expect(weakRef?.deref()).not.toEqual(undefined);
+        local.close();
+      });
+      test("syncGc is not triggered when option 'doNotSyncGc' is set", async () => {
+        class Test1234 { }
+        let weakRef: WeakRef<{}> | undefined;
+        const api = { test() { const o = new Test1234(); weakRef = new WeakRef(o); return o; } };
+        const [remote, local] = getObjectStorePair({ scheduleGcAfterObjectCount: 3, scheduleGcAfterTime: 30000, requestLatency: 5, doNotSyncGc: true });
+        remote.exposeRemoteObject("test", api);
+        const a = local.getRemoteObject<typeof api>("test");
+        let o: unknown[] | undefined = await Promise.all([0, 1, 2].map(() => a.test()));
+        await doGc();
+        expect(weakRef?.deref()).not.toEqual(undefined);
+        o.length = 0;
+        await doGc();
+        expect(weakRef?.deref()).not.toEqual(undefined);
+        local.close();
+      });
+      test("testing id wrapping", async () => {
+        const api = { test() { return {}; } };
+        const [remote, local] = getObjectStorePair();
+        remote.exposeRemoteObject("test", api);
+        const a = local.getRemoteObject<typeof api>("test");
+        setTestable(remote, "#lastId", Number.MAX_SAFE_INTEGER - 1);
+        await a.test();
+        await a.test();
+        await a.test();
         local.close();
       });
       // Unsupported Proxy Handlers
@@ -639,6 +707,21 @@ describe('RequestHandler.ts', () => {
         await expect(async () => await a.log(Symbol())).rejects.toThrow("Remote Object with id 1 is unknown.");
         local.close();
         remote.close();
+      });
+    });
+    describe("syncGc", () => {
+      test("option 'doNotSync' should cause error on syncGc", async () => {
+        const os = new ObjectStore({ async request() { return ""; } }, { doNotSyncGc: true });
+        expect(() => os.syncGc()).toThrow("Can not syncGc if option doNotSyncGc is true.");
+        os.close();
+      });
+      test("calling multiple times while busy has no effect", async () => {
+        const request = jest.fn(async () => { return {}; });
+        const os = new ObjectStore({ request }, { scheduleGcAfterTime: 0 });
+        os.syncGc();
+        os.syncGc();
+        expect(request).toBeCalledTimes(1);
+        os.close();
       });
     });
   });
