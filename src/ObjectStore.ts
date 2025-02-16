@@ -1137,6 +1137,6 @@ function dummyFinalizationRegistry(): FinalizationRegistry<number> {
   return {
     [Symbol.toStringTag]: "FinalizationRegistry",
     register(_target: WeakKey, _heldValue: number, _unregisterToken?: WeakKey): void { },
-    unregister(_unregisterToken: WeakKey): void { },
+    unregister(_unregisterToken: WeakKey): boolean { return true; },
   };
 }
