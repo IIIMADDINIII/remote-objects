@@ -32,12 +32,12 @@ export async function version() {
   await tools.createCommit({ message: `v${version}` });
 }
 
-export async function publish() {
+export async function pub() {
   await tools.cleanWithGit();
   await tools.prodInstallDependencies();
   await tools.rollup.buildAndRunTests(buildOptions);
   await tools.ensureGitIsClean();
   await version();
-  await tools.exec`pnpm -r publish`;
+  await tools.exec`pnpm publish`;
   await tools.exec`git push`;
 }

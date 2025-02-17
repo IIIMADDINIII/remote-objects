@@ -57,6 +57,7 @@ function isMessage(data: Transferable): data is Message {
  * @public
  */
 export class TimeoutError extends Error { }
+
 /**
  * Error Class which is used if the remote requestHandler thew an Error.
  * @public
@@ -244,7 +245,6 @@ export class RequestHandler extends RequestHandlerBase implements RequestHandler
   #checkClosed(): void {
     if (this.#closed) throw new Error("Connection is already closed.");
   }
-
 }
 
 

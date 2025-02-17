@@ -22,7 +22,7 @@
     "build": "pnpm run gulp build",
     "buildCi": "pnpm run gulp buildCi",
     "test": "pnpm run gulp test",
-    "publish": "pnpm run gulp publish",
+    "pub": "pnpm run gulp pub",
     "gulp": "pnpm --package=@iiimaddiniii/js-build-tool-cli@1.0.2 dlx js-build-tool"
   },
   "repository": {

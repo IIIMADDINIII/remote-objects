@@ -15,7 +15,6 @@ export interface CreateObjectStoreOptions extends MessageHandlerInterface, Objec
   timeout?: number;
 }
 
-
 /**
  * Creates a new ObjectStore with a new RequestHandler.
  * @param options - Options on how to create the ObjectStore and RequestHandler.
@@ -28,13 +27,25 @@ export function createObjectStore(options: CreateObjectStoreOptions): ObjectStor
   return objectStore;
 }
 
-export * from "./RequestHandler.js";
+export { RequestError, RequestHandler, TimeoutError } from "./RequestHandler.js";
 
-export * from "./Interfaces.js";
+export { isProxy, ObjectStore } from "./ObjectStore.js";
+
+export type {
+  DisconnectedHandler,
+  MessageHandlerInterface,
+  NewMessageHandler,
+  RequestHandlerFunction,
+  RequestHandlerInterface,
+  SendMessageFunction,
+  Transferable
+} from "./Interfaces.js";
+
 export type {
   Local,
   LocalConstructor,
   LocalFunction,
+  ObjectStoreOptions,
   Primitives,
   Remote,
   RemoteConstructor,
@@ -44,13 +55,14 @@ export type {
   RemoteFunctionParameters,
   RemoteFunctionPromise,
   RemoteObj,
-  RemoteObjPromise,
   RemoteObject,
   RemoteObjectAble,
   RemoteObjectPrototype,
+  RemoteObjPromise,
   RemotePrimitiveReadonly,
   RemotePrimitiveSettable,
   RemoteReturnType
 } from "./types.js";
-export { ObjectStore, type ObjectStoreOptions };
+
+
 
