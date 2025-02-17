@@ -1,7 +1,10 @@
 {
-  "name": "remote-objects",
+  "name": "@iiimaddiniii/remote-objects",
   "version": "0.0.1",
-  "description": "Template for creating a NodeJs package",
+  "description": "A library wich enables the usage of JS-Objects across an communication interface",
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": {
       "import": {
@@ -19,6 +22,7 @@
     "build": "pnpm run gulp build",
     "buildCi": "pnpm run gulp buildCi",
     "test": "pnpm run gulp test",
+    "publish": "pnpm run gulp publish",
     "gulp": "pnpm --package=@iiimaddiniii/js-build-tool-cli@1.0.2 dlx js-build-tool"
   },
   "repository": {

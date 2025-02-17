@@ -9,3 +9,4 @@
 /*.tsbuildinfo
 /jest.config.mjs
 /gulpfile.mjs
+/src/**/*
