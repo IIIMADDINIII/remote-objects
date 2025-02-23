@@ -559,6 +559,30 @@ describe('RequestHandler.ts', () => {
         expect(weakRef?.deref()).not.toEqual(undefined);
         local.close();
       });
+      test("syncGc should work even if a request packet is lost", async () => {
+        class Test1234 { a: number = 10; }
+        const api = { async test(_: Remote<Test1234>) { return 10; } };
+        const local: ObjectStore = new ObjectStore({
+          async request(data) {
+            if (typeof data === "object" && "type" in data && data["type"] === "request") return new Promise(() => { });
+            return remote.requestHandler(data);
+          }
+        }, { scheduleGcAfterTime: 10, requestLatency: 5 });
+        const remote: ObjectStore = new ObjectStore({ request: (data) => local.requestHandler(data) }, { scheduleGcAfterTime: 10, requestLatency: 5 });
+        remote.exposeRemoteObject("test", api);
+        const a = local.getRemoteObject<typeof api>("test");
+        let weakRef: WeakRef<{}> | undefined;
+        async function test() {
+          const t = new Test1234();
+          weakRef = new WeakRef(t);
+          await a.test(t);
+        }
+        test().then(() => { });
+        expect(weakRef?.deref()).not.toEqual(undefined);
+        await doGc();
+        expect(weakRef?.deref()).toEqual(undefined);
+        local.close();
+      });
       test("testing id wrapping", async () => {
         const api = { test() { return {}; } };
         const [remote, local] = getObjectStorePair();

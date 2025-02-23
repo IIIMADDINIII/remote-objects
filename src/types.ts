@@ -223,7 +223,7 @@ export type RemoteReturnType<T> =
   [T] extends [never] ? Remote<T> :
   T extends PromiseLike<infer T> ? RemoteReturnType<T> :
   T extends Primitives ? RemotePrimitiveReadonly<T> :
-  T extends Remote<infer Local> ? Local :
+  T extends Remote<infer Local> ? PromiseLike<Local> :
   Remote<T>;
 
 /**
@@ -793,5 +793,4 @@ export type GcIdDescription = {
    * The local Item.
    */
   value: symbol | {};
-}
-
+};
