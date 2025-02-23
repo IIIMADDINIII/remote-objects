@@ -583,6 +583,120 @@ describe('RequestHandler.ts', () => {
         expect(weakRef?.deref()).toEqual(undefined);
         local.close();
       });
+      test("syncGc should work even if a response is delayed", async () => {
+        class Test1234 { a: number = 10; }
+        let weakRef: WeakRef<{}> | undefined;
+        const api = { async test() { const a = new Test1234(); weakRef = new WeakRef(a); return a; } };
+        const local: ObjectStore = new ObjectStore({
+          async request(data) {
+            if (typeof data === "object" && "type" in data && data["type"] === "request") {
+              const ret = remote.requestHandler(data);
+              await setTimeout(110);
+              return ret;
+            };
+            return remote.requestHandler(data);
+          }
+        }, { scheduleGcAfterTime: 10, requestLatency: 5 });
+        const remote: ObjectStore = new ObjectStore({ request: (data) => local.requestHandler(data) }, { scheduleGcAfterTime: 10, requestLatency: 5 });
+        remote.exposeRemoteObject("test", api);
+        const a = local.getRemoteObject<typeof api>("test");
+        let b: Remote<Test1234> | undefined = await a.test();
+        expect(weakRef?.deref()).not.toEqual(undefined);
+        await doGc();
+        expect(weakRef?.deref()).toEqual(undefined);
+        use(b);
+        b = undefined;
+        local.close();
+      });
+      test("syncGc should object wich was collected is no longer accessible from remote", async () => {
+        class Test1234 { a: number = 10; }
+        let weakRef: WeakRef<{}> | undefined;
+        const api = { async test() { const a = new Test1234(); weakRef = new WeakRef(a); return a; } };
+        const local: ObjectStore = new ObjectStore({
+          async request(data) {
+            if (typeof data === "object" && "type" in data && data["type"] === "request") {
+              const ret = remote.requestHandler(data);
+              await setTimeout(110);
+              return ret;
+            };
+            return remote.requestHandler(data);
+          }
+        }, { scheduleGcAfterTime: 10, requestLatency: 5 });
+        const remote: ObjectStore = new ObjectStore({ request: (data) => local.requestHandler(data) }, { scheduleGcAfterTime: 10, requestLatency: 5 });
+        remote.exposeRemoteObject("test", api);
+        const a = local.getRemoteObject<typeof api>("test");
+        let b: Remote<Test1234> = await a.test();
+        expect(weakRef?.deref()).not.toEqual(undefined);
+        await doGc();
+        expect(weakRef?.deref()).toEqual(undefined);
+        await expect(async () => await b.a).rejects.toThrow("Local Object with id 1 is unknown.");
+        local.close();
+      });
+      test("syncGc should work even if gcSync Request is Delayed", async () => {
+        class Test1234 { }
+        const api = { async test(_: Remote<Test1234>) { return 10; } };
+        const local: ObjectStore = new ObjectStore({
+          async request(data) {
+            if (typeof data === "object" && "type" in data && data["type"] === "syncGcRequest") {
+              await setTimeout(250);
+              const ret = remote.requestHandler(data);
+              return ret;
+            };
+            return remote.requestHandler(data);
+          }
+        }, { scheduleGcAfterTime: 10, requestLatency: 5 });
+        const remote: ObjectStore = new ObjectStore({ request: (data) => local.requestHandler(data) }, { scheduleGcAfterTime: 10, requestLatency: 5 });
+        remote.exposeRemoteObject("test", api);
+        const a = local.getRemoteObject<typeof api>("test");
+        let weakRef: WeakRef<{}> | undefined;
+        async function test() {
+          const t = new Test1234();
+          weakRef = new WeakRef(t);
+          await a.test(t);
+        }
+        await test();
+        expect(weakRef?.deref()).not.toEqual(undefined);
+        await doGc();
+        await doGc();
+        expect(weakRef?.deref()).toEqual(undefined);
+        await setTimeout(200);
+        local.close();
+      });
+      test("do not delete object if it was resend in the meantime", async () => {
+        class Test1234 { }
+        const api = { async test(_: Remote<Test1234> | undefined) { return 10; } };
+        const local: ObjectStore = new ObjectStore({
+          async request(data) {
+            if (typeof data === "object" && "type" in data && data["type"] === "syncGcRequest") {
+              const ret = remote.requestHandler(data);
+              await setTimeout(20);
+              return ret;
+            };
+            if (typeof data === "object" && "type" in data && data["type"] === "request") return new Promise(() => { });
+            return remote.requestHandler(data);
+          }
+        }, { scheduleGcAfterTime: 10, requestLatency: 5 });
+        const remote: ObjectStore = new ObjectStore({ request: (data) => local.requestHandler(data) }, { scheduleGcAfterTime: 10, requestLatency: 5 });
+        remote.exposeRemoteObject("test", api);
+        const a = local.getRemoteObject<typeof api>("test");
+        let weakRef: WeakRef<Test1234> | undefined;
+        async function test() {
+          if (weakRef === undefined) {
+            const t = new Test1234();
+            weakRef = new WeakRef(t);
+          }
+          await a.test(weakRef.deref());
+        }
+        test();
+        await doGc(5);
+        test();
+        await doGc(5);
+        expect(weakRef?.deref()).not.toEqual(undefined);
+        await doGc();
+        expect(weakRef?.deref()).toEqual(undefined);
+        await setTimeout(200);
+        local.close();
+      });
       test("testing id wrapping", async () => {
         const api = { test() { return {}; } };
         const [remote, local] = getObjectStorePair();

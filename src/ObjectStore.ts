@@ -138,12 +138,11 @@ export class ObjectStore {
     if (requestHandler.setRequestHandler) requestHandler.setRequestHandler(this.requestHandler);
     this.disconnectedHandler = this.disconnectedHandler.bind(this);
     if (requestHandler.setDisconnectedHandler) requestHandler.setDisconnectedHandler(this.disconnectedHandler);
-    this.syncGc = this.syncGc.bind(this);
     if (options.doNotSyncGc) { this.#finalizationRegister = () => { }; }
     else {
       const reg = new FinalizationRegistry<number>((id) => this.#cleanupObject(id));
       this.#finalizationRegister = reg.register.bind(reg);
-      if (this.#options.scheduleGcAfterTime !== 0) this.#syncGcTimer = setTimeout(this.syncGc, this.#options.scheduleGcAfterTime);
+      if (this.#options.scheduleGcAfterTime !== 0) this.#syncGcTimer = setTimeout(() => this.#syncGc(), this.#options.scheduleGcAfterTime);
     }
   }
 
@@ -241,7 +240,7 @@ export class ObjectStore {
     switch (request["type"]) {
       case "close": return this.close(), "";
       case "request": return await this.#requestValueHandler(<ValueRequestDescription>request);
-      case "syncGcRequest": return await this.#syncGcHandler(<SyncGcRequest>request);
+      case "syncGcRequest": return this.#syncGcHandler(<SyncGcRequest>request);
       default: throw new Error("request is not a message from Remote ObjectStore because it has a unknown value in the type field.");
     }
   };
@@ -253,14 +252,21 @@ export class ObjectStore {
   syncGc(): void {
     this.#checkClosed();
     if (this.#options.doNotSyncGc) throw new Error("Can not syncGc if option doNotSyncGc is true.");
-    if (this.#syncGcBusy) return;
+    return this.#syncGc();
+  }
+
+  /**
+   * Internal SyncGc Method which does not throw on connection or doNotSync setting.
+   */
+  #syncGc(): void {
+    if (this.#closed || this.#syncGcBusy) return;
     this.#syncGcBusy = true;
     if (this.#syncGcTimer !== undefined) clearTimeout(this.#syncGcTimer);
     this.#syncGcTimer = undefined;
     this.#internalSyncGc().then(() => {
       this.#syncGcBusy = false;
       this.#syncGcScheduled = false;
-      if (this.#options.scheduleGcAfterTime !== 0) this.#syncGcTimer = setTimeout(this.syncGc, this.#options.scheduleGcAfterTime);
+      if (this.#options.scheduleGcAfterTime !== 0) this.#syncGcTimer = setTimeout(() => this.#syncGc(), this.#options.scheduleGcAfterTime);
     });
   }
 
@@ -270,7 +276,7 @@ export class ObjectStore {
    * @param request - Request from Remote.
    * @returns response object with a list of all successfully deleted ids and all unknown ids.
    */
-  async #syncGcHandler(request: SyncGcRequest): Promise<SyncGcResponse> {
+  #syncGcHandler(request: SyncGcRequest): SyncGcResponse {
     const deletedItems: number[] = [];
     const refTime = performance.now() - this.#options.requestLatency;
     // Delete deletedItems, if is was not send recently
@@ -365,7 +371,7 @@ export class ObjectStore {
     if (this.#syncGcScheduled || this.#syncGcBusy) return;
     if (this.#syncGcTimer !== undefined) clearTimeout(this.#syncGcTimer);
     this.#syncGcScheduled = true;
-    this.#syncGcTimer = setTimeout(this.syncGc, 0);
+    this.#syncGcTimer = setTimeout(() => this.#syncGc(), 0);
   }
 
   /**
