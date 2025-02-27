@@ -138,7 +138,7 @@ export class RequestHandler extends RequestHandlerBase implements RequestHandler
       this.#pendingRequests.set(id, { success, error });
       // Generate and send Request (cancel if it fails)
       const data: RequestMessage = { id, request };
-      this.#messageHandler.sendMessage(data).catch(error);
+      this.#sendMessage(data).catch(error);
     });
   };
 
@@ -199,13 +199,13 @@ export class RequestHandler extends RequestHandlerBase implements RequestHandler
     if (this.#closed) return this.emit("error", new Error("Connection is already closed")), void 0;
     const id = data.id;
     if (!this.#requestHandler) {
-      this.#messageHandler.sendMessage({ id, errorResponse: "Remote has no requestHandler set" }).catch((error) => this.emit("error", error));
+      this.#sendMessage({ id, errorResponse: "Remote has no requestHandler set" }).catch((error) => this.emit("error", error));
       return this.emit("error", new Error("requestHandler is not set")), void 0;
     }
     this.#requestHandler(data.request).then((response) => {
-      this.#messageHandler.sendMessage({ id, response }).catch((error) => this.emit("error", error));
+      this.#sendMessage({ id, response }).catch((error) => this.emit("error", error));
     }).catch((error) => {
-      this.#messageHandler.sendMessage({ id, errorResponse: "Remote requestHandler threw: " + error }).catch((error) => this.emit("error", error));
+      this.#sendMessage({ id, errorResponse: "Remote requestHandler threw: " + error }).catch((error) => this.emit("error", error));
       return this.emit("error", error), void 0;
     });
   }
@@ -244,6 +244,14 @@ export class RequestHandler extends RequestHandlerBase implements RequestHandler
    */
   #checkClosed(): void {
     if (this.#closed) throw new Error("Connection is already closed.");
+  }
+
+  /**
+   * Send a message via the this.#messageHanders.sendMessage.
+   * Converts a maybe Promise in to a Promise.
+   */
+  async #sendMessage(data: Transferable): Promise<void> {
+    return await this.#messageHandler.sendMessage(data);
   }
 }
 

@@ -12,7 +12,7 @@ export type Transferable = string | number | boolean | Transferable[] | { [key: 
  * @param data - the data to send to the remote (JSON Compatible).
  * @public
  */
-export type SendMessageFunction = (data: Transferable) => Promise<void>;
+export type SendMessageFunction = (data: Transferable) => Promise<void> | void;
 
 
 /**
