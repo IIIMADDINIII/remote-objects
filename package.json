@@ -1,6 +1,6 @@
 {
   "name": "@iiimaddiniii/remote-objects",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "A library wich enables the usage of JS-Objects across an communication interface",
   "publishConfig": {
     "access": "public"
