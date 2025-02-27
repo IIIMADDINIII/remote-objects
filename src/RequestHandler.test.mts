@@ -66,7 +66,7 @@ describe('RequestHandler.ts', () => {
       test("should throw if no requestHandler is set and cant send message", async () => {
         const { master, faulty } = getFaultyRequestHandlerPair();
         const cb = jest.fn();
-        faulty.on("error", cb);
+        faulty.addEventListener("error", cb);
         await expect(master.request(0)).rejects.toThrow("Request Timeout reached");
         expect(() => { throw cb.mock.lastCall?.[0]; }).toThrow("test");
       });
@@ -190,6 +190,61 @@ describe('RequestHandler.ts', () => {
         const request = rh.request("test");
         rh.close();
         await expect(request).rejects.toThrow("Connection was Closed");
+      });
+    });
+    describe("on", () => {
+      test("can be called with some thing other than error", async () => {
+        const rh = getRequestHandler();
+        rh.on("test", () => { });
+      });
+      test("if no error is registered, console.log happens", async () => {
+        try {
+          const errorSpy = jest.spyOn(console, 'error');
+          const rh = new RequestHandler({
+            async sendMessage(data) {
+              setTimeout(() => rh.newMessageHandler(data), 0);
+            }
+          }, 100);
+          rh.newMessageHandler({ id: 0, errorResponse: "" });
+          expect(errorSpy).toHaveBeenCalledTimes(1);
+        } finally {
+          jest.restoreAllMocks();
+        }
+      });
+      test("if an error handler throws, it is logged", async () => {
+        try {
+          const errorSpy = jest.spyOn(console, 'error');
+          const rh = new RequestHandler({
+            async sendMessage(data) {
+              setTimeout(() => rh.newMessageHandler(data), 0);
+            }
+          }, 100);
+          rh.on("error", () => {
+            throw new Error("test");
+          });
+          rh.newMessageHandler({ id: 0, errorResponse: "" });
+          expect(errorSpy).toHaveBeenCalledTimes(1);
+        } finally {
+          jest.restoreAllMocks();
+        }
+      });
+    });
+    describe("off", () => {
+      test("calling off with something else than error has no effect", async () => {
+        const rh = getRequestHandler();
+        rh.off("test", () => { });
+      });
+      test("removing an unknown listener has no effect", async () => {
+        const rh = getRequestHandler();
+        rh.removeEventListener("error", () => { });
+      });
+      test("listener can be removed again", async () => {
+        const rh = getRequestHandler();
+        const l = jest.fn();
+        rh.on("error", l);
+        rh.off("error", l);
+        rh.newMessageHandler({ id: 0, errorResponse: "" });
+        expect(l).toBeCalledTimes(0);
       });
     });
   });

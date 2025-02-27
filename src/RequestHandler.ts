@@ -1,5 +1,3 @@
-import EventEmitter from "events";
-import type TypedEventEmitter from "typed-emitter";
 import type { DisconnectedHandler, MessageHandlerInterface, RequestHandlerFunction, RequestHandlerInterface, Transferable } from "./Interfaces.js";
 import "./declarations.js";
 import { testable } from "./util.js";
@@ -65,22 +63,10 @@ export class TimeoutError extends Error { }
 export class RequestError extends Error { }
 
 /**
- * Events for the RequestHandler Class.
- */
-type RequestHandlerEvents = {
-  error(error: Error): void;
-};
-
-/**
- * Base EventEmitter Class to make EventEmitter typeSafe.
- */
-const RequestHandlerBase = EventEmitter as new () => TypedEventEmitter<RequestHandlerEvents>;
-
-/**
  * A Implementation of an Request Handler to use with message channels like postMessage or Websockets.
  * @public
  */
-export class RequestHandler extends RequestHandlerBase implements RequestHandlerInterface {
+export class RequestHandler implements RequestHandlerInterface {
   #messageHandler: MessageHandlerInterface;
   #requestHandler: RequestHandlerFunction | undefined;
   #disconnectedHandler: DisconnectedHandler | undefined;
@@ -89,6 +75,7 @@ export class RequestHandler extends RequestHandlerBase implements RequestHandler
   @testable
   #lastRequestId: number = 0;
   #pendingRequests: Map<number, ResolveRequest> = new Map();
+  #errorListeners: ((e: unknown) => void)[] = [];
 
   /**
    * Creates a new RequestHandler to be used with the ObjectStore.
@@ -96,7 +83,6 @@ export class RequestHandler extends RequestHandlerBase implements RequestHandler
    * @param timeout - Time in milliseconds after which a request is canceled with an TimeoutError (default = 10000).
    */
   constructor(messageHandler: MessageHandlerInterface, timeout: number = 10000) {
-    super();
     this.#messageHandler = messageHandler;
     this.newMessageHandler = this.newMessageHandler.bind(this);
     if (messageHandler.setNewMessageHandler) messageHandler.setNewMessageHandler(this.newMessageHandler);
@@ -196,17 +182,17 @@ export class RequestHandler extends RequestHandlerBase implements RequestHandler
    * @param data - the Data received from Remote.
    */
   #handleRequest(data: RequestMessage): void {
-    if (this.#closed) return this.emit("error", new Error("Connection is already closed")), void 0;
+    if (this.#closed) return this.#emitError(new Error("Connection is already closed")), void 0;
     const id = data.id;
     if (!this.#requestHandler) {
-      this.#sendMessage({ id, errorResponse: "Remote has no requestHandler set" }).catch((error) => this.emit("error", error));
-      return this.emit("error", new Error("requestHandler is not set")), void 0;
+      this.#sendMessage({ id, errorResponse: "Remote has no requestHandler set" }).catch((error) => this.#emitError(error));
+      return this.#emitError(new Error("requestHandler is not set")), void 0;
     }
     this.#requestHandler(data.request).then((response) => {
-      this.#sendMessage({ id, response }).catch((error) => this.emit("error", error));
+      this.#sendMessage({ id, response }).catch((error) => this.#emitError(error));
     }).catch((error) => {
-      this.#sendMessage({ id, errorResponse: "Remote requestHandler threw: " + error }).catch((error) => this.emit("error", error));
-      return this.emit("error", error), void 0;
+      this.#sendMessage({ id, errorResponse: "Remote requestHandler threw: " + error }).catch((error) => this.#emitError(error));
+      return this.#emitError(error), void 0;
     });
   }
 
@@ -215,10 +201,10 @@ export class RequestHandler extends RequestHandlerBase implements RequestHandler
    * @param data - the Data received from Remote.
    */
   #handleResponse(data: ResponseMessage | ErrorResponseMessage): void {
-    if (this.#closed) return this.emit("error", new Error("Connection is already closed")), void 0;
+    if (this.#closed) return this.#emitError(new Error("Connection is already closed")), void 0;
     const id = data.id;
     const resolveRequest = this.#pendingRequests.get(id);
-    if (resolveRequest === undefined) return this.emit("error", new Error("Response with invalid id (maybe from timeout): " + id)), void 0;
+    if (resolveRequest === undefined) return this.#emitError(new Error("Response with invalid id (maybe from timeout): " + id)), void 0;
     if ("errorResponse" in data) return resolveRequest.error(new RequestError(data.errorResponse));
     return resolveRequest.success(data.response);
   }
@@ -252,6 +238,72 @@ export class RequestHandler extends RequestHandlerBase implements RequestHandler
    */
   async #sendMessage(data: Transferable): Promise<void> {
     return await this.#messageHandler.sendMessage(data);
+  }
+
+  /**
+   * Call all error Handlers, if none exist print to console.
+   * @param e - the error to emit.
+   */
+  #emitError(e: Error) {
+    if (this.#errorListeners.length === 0) return console.error(e);
+    for (let listener of this.#errorListeners) {
+      try {
+        listener(e);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }
+
+  /**
+   * Add an Error Event Listener.
+   * @param eventName - only "error" is supported. All other event names are ignored.
+   * @param listener - function to call if an error happens.
+   * @returns this
+   */
+  on(eventName: "error", listener: (e: unknown) => void): this;
+  on(eventName: string, listener: (e: unknown) => void): this;
+  on(eventName: string, listener: (e: unknown) => void): this {
+    if (eventName !== "error") return this;
+    this.#errorListeners.push(listener);
+    return this;
+  }
+
+  /**
+   * Add an Error Event Listener.
+   * @param eventName - only "error" is supported. All other event names are ignored.
+   * @param listener - function to call if an error happens.
+   */
+  addEventListener(eventName: "error", listener: (e: unknown) => void): void;
+  addEventListener(eventName: string, listener: (e: unknown) => void): void;
+  addEventListener(eventName: "error" | string, listener: (e: unknown) => void): void {
+    this.on(eventName, listener);
+  };
+
+  /**
+   * Remove a Error Listener again.
+   * @param eventName - only "error" is supported. All other event names are ignored.
+   * @param listener - handler which was registered with on.
+   * @returns this
+   */
+  off(eventName: "error", listener: (e: unknown) => void): this;
+  off(eventName: string, listener: (e: unknown) => void): this;
+  off(eventName: "error" | string, listener: (e: unknown) => void): this {
+    if (eventName !== "error") return this;
+    const i = this.#errorListeners.indexOf(listener);
+    if (i >= 0) this.#errorListeners.splice(i, 1);
+    return this;
+  }
+
+  /**
+   * Remove a Error Listener again.
+   * @param eventName - only "error" is supported. All other event names are ignored.
+   * @param listener - handler which was registered with addEventListener.
+   */
+  removeEventListener(eventName: "error", listener: (e: unknown) => void): void;
+  removeEventListener(eventName: string, listener: (e: unknown) => void): void;
+  removeEventListener(eventName: "error" | string, listener: (e: unknown) => void): void {
+    this.off(eventName, listener);
   }
 }
 
