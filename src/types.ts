@@ -123,7 +123,7 @@ export type Remote<T> =
   T extends (...args: any[]) => any ? RemoteFunctionPromise<T> :
   T extends Primitives ? RemotePrimitiveSettable<T> :
   T extends {} ? RemoteObjPromise<T> :
-  T extends never ? Promise<never> :
+  T extends never ? PromiseLike<never> :
   never;
 
 /**
@@ -148,7 +148,7 @@ export type RemoteObj<T extends {}> = {
  * Makes it possible to await an object.
  * @public
  */
-export type RemoteObjPromise<T extends {}> = RemoteObj<T> & Promise<RemoteObj<T>> | RemoteObj<T>;
+export type RemoteObjPromise<T extends {}> = RemoteObj<T> & PromiseLike<RemoteObj<T>> | RemoteObj<T>;
 
 /**
  * Is mapping a Function from the Remote to how the types are represented locally.
@@ -162,7 +162,7 @@ export type RemoteFunction<T extends (...args: any[]) => any> =
  * Makes it possible to await an function.
  * @public
  */
-export type RemoteFunctionPromise<T extends (...args: any[]) => any> = RemoteFunction<T> & Promise<RemoteFunction<T>> | RemoteFunction<T>;
+export type RemoteFunctionPromise<T extends (...args: any[]) => any> = RemoteFunction<T> & PromiseLike<RemoteFunction<T>> | RemoteFunction<T>;
 
 /**
  * Is mapping a Constructor from the Remote to how the types are represented locally.
@@ -176,7 +176,7 @@ export type RemoteConstructor<T extends new () => any> =
  * Makes it possible to await an constructor.
  * @public
  */
-export type RemoteConstructorPromise<T extends new () => any> = RemoteConstructor<T> & Promise<RemoteConstructor<T>> | RemoteConstructor<T>;
+export type RemoteConstructorPromise<T extends new () => any> = RemoteConstructor<T> & PromiseLike<RemoteConstructor<T>> | RemoteConstructor<T>;
 
 /**
  * Is mapping the function Parameters Types from the Remote to how the types are represented locally.
