@@ -316,6 +316,7 @@ export class ObjectStore {
    */
   async #internalSyncGc(): Promise<void> {
     try {
+      this.#checkClosed();
       const newItems: Map<number, number> = new Map();
       const refTime = performance.now() - this.#options.requestLatency;
       for (const [key, description] of this.#newLocalIds.entries()) {
@@ -681,6 +682,7 @@ export class ObjectStore {
    * @returns the value of the requested data.
    */
   async #requestValue(remotePath: RemotePath): Promise<unknown> {
+    this.#checkClosed();
     const request = this.#describeValueRequest(remotePath);
     const response = await this.#requestHandler.request(request) as ValueResponseDescription;
     const value = await this.#createResponseValue(response);
