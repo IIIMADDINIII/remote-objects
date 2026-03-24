@@ -1,5 +1,5 @@
 {
-  "jest.nodeEnv": {
-    "NODE_OPTIONS": "--experimental-vm-modules"
-  }
+  "deno.enablePaths": [
+    "./**/mise/tasks/", "./mise/tasks/",
+  ],
 }

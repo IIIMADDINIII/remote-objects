@@ -1,6 +1,10 @@
-import type { DisconnectedHandler, MessageHandlerInterface, RequestHandlerFunction, RequestHandlerInterface, Transferable } from "./Interfaces.js";
-import "./declarations.js";
-import { testable } from "./util.js";
+import type {
+  DisconnectedHandler,
+  MessageHandlerInterface,
+  RequestHandlerFunction,
+  RequestHandlerInterface,
+  Transferable,
+} from "./Interfaces.js";
 
 /**
  * Structure of an Request.
@@ -47,20 +51,21 @@ type ResolveRequest = {
 function isMessage(data: Transferable): data is Message {
   if (typeof data !== "object" || data === null) return false;
   if (!("id" in data) || typeof data["id"] !== "number") return false;
-  return ("request" in data) || ("response" in data) || ("errorResponse" in data);
+  return ("request" in data) || ("response" in data) ||
+    ("errorResponse" in data);
 }
 
 /**
  * Error Class which is used if an Timeout happens.
  * @public
  */
-export class TimeoutError extends Error { }
+export class TimeoutError extends Error {}
 
 /**
  * Error Class which is used if the remote requestHandler thew an Error.
  * @public
  */
-export class RequestError extends Error { }
+export class RequestError extends Error {}
 
 /**
  * A Implementation of an Request Handler to use with message channels like postMessage or Websockets.
@@ -72,7 +77,6 @@ export class RequestHandler implements RequestHandlerInterface {
   #disconnectedHandler: DisconnectedHandler | undefined;
   #timeout: number;
   #closed: boolean = false;
-  @testable
   #lastRequestId: number = 0;
   #pendingRequests: Map<number, ResolveRequest> = new Map();
   #errorListeners: ((e: unknown) => void)[] = [];
@@ -82,22 +86,29 @@ export class RequestHandler implements RequestHandlerInterface {
    * @param messageHandler - Interface describing a Message channel (like postMessage or Websockets).
    * @param timeout - Time in milliseconds after which a request is canceled with an TimeoutError (default = 10000).
    */
-  constructor(messageHandler: MessageHandlerInterface, timeout: number = 10000) {
+  constructor(
+    messageHandler: MessageHandlerInterface,
+    timeout: number = 10000,
+  ) {
     this.#messageHandler = messageHandler;
     this.newMessageHandler = this.newMessageHandler.bind(this);
-    if (messageHandler.setNewMessageHandler) messageHandler.setNewMessageHandler(this.newMessageHandler);
+    if (messageHandler.setNewMessageHandler) {
+      messageHandler.setNewMessageHandler(this.newMessageHandler);
+    }
     this.disconnectedHandler = this.disconnectedHandler.bind(this);
-    if (messageHandler.setDisconnectedHandler) messageHandler.setDisconnectedHandler(this.disconnectedHandler);
+    if (messageHandler.setDisconnectedHandler) {
+      messageHandler.setDisconnectedHandler(this.disconnectedHandler);
+    }
     this.#timeout = timeout;
   }
 
   /**
-  * This function should be invoked for every request to the Remote.
-  * As a result the requestHandler function on the Remote RequestHandler is invoked with this request Value.
-  * The return value of the requestHandler is returned by this function asynchronously.
-  * @param request - the request information to send to Remote (JSON Compatible).
-  * @returns a Promise containing the response of the Request (JSON Compatible).
-  */
+   * This function should be invoked for every request to the Remote.
+   * As a result the requestHandler function on the Remote RequestHandler is invoked with this request Value.
+   * The return value of the requestHandler is returned by this function asynchronously.
+   * @param request - the request information to send to Remote (JSON Compatible).
+   * @returns a Promise containing the response of the Request (JSON Compatible).
+   */
   async request(request: Transferable): Promise<Transferable> {
     this.#checkClosed();
     const id = this.#nextRequestId();
@@ -126,14 +137,18 @@ export class RequestHandler implements RequestHandlerInterface {
       const data: RequestMessage = { id, request };
       this.#sendMessage(data).catch(error);
     });
-  };
+  }
 
   /**
    * This function should be called for every Message received from remote.
    * @param data - the data wich was received from remote.
    */
   newMessageHandler(data: Transferable): void {
-    if (!isMessage(data)) throw new Error("data needs to contain a id [number] and a request, response or errorResponse");
+    if (!isMessage(data)) {
+      throw new Error(
+        "data needs to contain a id [number] and a request, response or errorResponse",
+      );
+    }
     if ("request" in data) return this.#handleRequest(data);
     this.#handleResponse(data);
   }
@@ -144,7 +159,7 @@ export class RequestHandler implements RequestHandlerInterface {
    */
   disconnectedHandler(): void {
     this.close();
-  };
+  }
 
   /**
    * Call this to Close the Connection.
@@ -158,16 +173,18 @@ export class RequestHandler implements RequestHandlerInterface {
     }
     this.#pendingRequests.clear();
     if (this.#disconnectedHandler) this.#disconnectedHandler();
-    if (this.#messageHandler.disconnectedHandler) this.#messageHandler.disconnectedHandler();
-  };
+    if (this.#messageHandler.disconnectedHandler) {
+      this.#messageHandler.disconnectedHandler();
+    }
+  }
 
   /**
-    * The ObjectStore will call this function with the requestHandler function in its constructor if it is defined.
-    * @param requestHandler - the requestHandler function which should be called for every incoming request.
-    */
+   * The ObjectStore will call this function with the requestHandler function in its constructor if it is defined.
+   * @param requestHandler - the requestHandler function which should be called for every incoming request.
+   */
   setRequestHandler(requestHandler: RequestHandlerFunction): void {
     this.#requestHandler = requestHandler;
-  };
+  }
 
   /**
    * The ObjectStore will call this function with the disconnectedHandler function in its constructor if it is defined.
@@ -175,23 +192,33 @@ export class RequestHandler implements RequestHandlerInterface {
    */
   setDisconnectedHandler(disconnectedHandler: DisconnectedHandler): void {
     this.#disconnectedHandler = disconnectedHandler;
-  };
+  }
 
   /**
    * Handles a Request message received from Remote.
    * @param data - the Data received from Remote.
    */
   #handleRequest(data: RequestMessage): void {
-    if (this.#closed) return this.#emitError(new Error("Connection is already closed")), void 0;
+    if (this.#closed) {
+      return this.#emitError(new Error("Connection is already closed")), void 0;
+    }
     const id = data.id;
     if (!this.#requestHandler) {
-      this.#sendMessage({ id, errorResponse: "Remote has no requestHandler set" }).catch((error) => this.#emitError(error));
+      this.#sendMessage({
+        id,
+        errorResponse: "Remote has no requestHandler set",
+      }).catch((error) => this.#emitError(error));
       return this.#emitError(new Error("requestHandler is not set")), void 0;
     }
     this.#requestHandler(data.request).then((response) => {
-      this.#sendMessage({ id, response }).catch((error) => this.#emitError(error));
+      this.#sendMessage({ id, response }).catch((error) =>
+        this.#emitError(error)
+      );
     }).catch((error) => {
-      this.#sendMessage({ id, errorResponse: "Remote requestHandler threw: " + error }).catch((error) => this.#emitError(error));
+      this.#sendMessage({
+        id,
+        errorResponse: "Remote requestHandler threw: " + error,
+      }).catch((error) => this.#emitError(error));
       return this.#emitError(error), void 0;
     });
   }
@@ -201,11 +228,20 @@ export class RequestHandler implements RequestHandlerInterface {
    * @param data - the Data received from Remote.
    */
   #handleResponse(data: ResponseMessage | ErrorResponseMessage): void {
-    if (this.#closed) return this.#emitError(new Error("Connection is already closed")), void 0;
+    if (this.#closed) {
+      return this.#emitError(new Error("Connection is already closed")), void 0;
+    }
     const id = data.id;
     const resolveRequest = this.#pendingRequests.get(id);
-    if (resolveRequest === undefined) return this.#emitError(new Error("Response with invalid id (maybe from timeout): " + id)), void 0;
-    if ("errorResponse" in data) return resolveRequest.error(new RequestError(data.errorResponse));
+    if (resolveRequest === undefined) {
+      return this.#emitError(
+        new Error("Response with invalid id (maybe from timeout): " + id),
+      ),
+        void 0;
+    }
+    if ("errorResponse" in data) {
+      return resolveRequest.error(new RequestError(data.errorResponse));
+    }
     return resolveRequest.success(data.response);
   }
 
@@ -276,9 +312,12 @@ export class RequestHandler implements RequestHandlerInterface {
    */
   addEventListener(eventName: "error", listener: (e: unknown) => void): void;
   addEventListener(eventName: string, listener: (e: unknown) => void): void;
-  addEventListener(eventName: "error" | string, listener: (e: unknown) => void): void {
+  addEventListener(
+    eventName: "error" | string,
+    listener: (e: unknown) => void,
+  ): void {
     this.on(eventName, listener);
-  };
+  }
 
   /**
    * Remove a Error Listener again.
@@ -302,9 +341,10 @@ export class RequestHandler implements RequestHandlerInterface {
    */
   removeEventListener(eventName: "error", listener: (e: unknown) => void): void;
   removeEventListener(eventName: string, listener: (e: unknown) => void): void;
-  removeEventListener(eventName: "error" | string, listener: (e: unknown) => void): void {
+  removeEventListener(
+    eventName: "error" | string,
+    listener: (e: unknown) => void,
+  ): void {
     this.off(eventName, listener);
   }
 }
-
-
