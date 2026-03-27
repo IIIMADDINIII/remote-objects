@@ -1,5 +1,4 @@
-/.rollup.cache/
-/node_modules/
 /dist/
-/tests/
+/coverage/
+/node_modules/
 /*.tsbuildinfo

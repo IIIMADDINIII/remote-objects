@@ -1381,13 +1381,11 @@ const nullDescription: NullDescription = { type: "null" };
 /**
  * A callable used for Proxies.
  */
-/* istanbul ignore next */
 const callableDefinition: Function = () => {};
 
 /**
  * A Function used for Proxies.
  */
-/* istanbul ignore next */
 const functionDefinition: Function = function () {};
 
 /**

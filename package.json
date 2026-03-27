@@ -14,14 +14,6 @@
     }
   },
   "type": "module",
-  "scripts": {
-    "clean": "pnpm run gulp clean",
-    "build": "pnpm run gulp build",
-    "buildCi": "pnpm run gulp buildCi",
-    "test": "pnpm run gulp test",
-    "pub": "pnpm run gulp pub",
-    "gulp": "pnpm --package=@iiimaddiniii/js-build-tool-cli@1.0.2 dlx js-build-tool"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/IIIMADDINIII/remote-objects"
@@ -33,12 +25,13 @@
   },
   "homepage": "https://github.com/IIIMADDINIII/remote-objects#readme",
   "devDependencies": {
-    "@typescript/native-preview": "^7.0.0-dev.20260324.1"
+    "@typescript/native-preview": "^7.0.0-dev.20260324.1",
+    "vite": "^8.0.3",
+    "vitest": "^4.1.2",
+    "@vitest/ui": "^4.1.2",
+    "@vitest/coverage-istanbul": "^4.1.2"
   },
   "pnpm": {
-    "overrides": {
-      "vite": "npm:vite@8.0.0-beta.18"
-    },
     "onlyBuiltDependencies": [
       "esbuild"
     ]

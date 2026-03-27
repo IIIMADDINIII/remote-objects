@@ -6,7 +6,9 @@ import { Ctx, pnpm, task } from "./common.ts";
 
 export const test = task("Run tests", async (ctx) => {
   await pnpm.install(ctx);
-  await execa({ verbose: ctx.execaVerbose() })`pnpm exec vitest run --coverage`;
+  await execa({
+    verbose: ctx.execaVerbose(),
+  })`pnpm exec vitest run --coverage --no-ui`;
 });
 
 if (import.meta.main) {

@@ -8,7 +8,7 @@ import { Ctx, pnpm, task } from "./common.ts";
 export const buildCi = task("Build CI", async (ctx) => {
   await clean(ctx);
   await pnpm.install(ctx, { frozenLockfile: true });
-  await execa({ verbose: ctx.execaVerbose() })`pnpm exec vite build`;
+  await execa({ verbose: ctx.execaVerbose() })`pnpm exec tsgo`;
 });
 
 if (import.meta.main) {

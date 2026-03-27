@@ -6,7 +6,7 @@ import { Ctx, pnpm, task } from "./common.ts";
 
 export const build = task("Build project", async (ctx) => {
   await pnpm.install(ctx);
-  await execa({ verbose: ctx.execaVerbose() })`pnpm exec vite build`;
+  await execa({ verbose: ctx.execaVerbose() })`pnpm tsgo`;
 });
 
 if (import.meta.main) {
