@@ -9,5 +9,6 @@ export default defineConfig({
       provider: "istanbul",
     },
     include: ["src/**/*.test.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"],
+    execArgv: ["--expose-gc"],
   },
 });

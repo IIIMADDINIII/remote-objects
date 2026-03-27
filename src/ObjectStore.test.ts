@@ -51,9 +51,9 @@ describe("ObjectStore", () => {
       );
     }
     global.gc();
-    await setTimeout(delay);
+    await wait(delay);
     global.gc();
-    await setTimeout(delay);
+    await wait(delay);
   }
 
   function use(_: unknown) {}
@@ -838,7 +838,7 @@ describe("ObjectStore", () => {
             data["type"] === "request"
           ) {
             const ret = remote.requestHandler(data);
-            await setTimeout(110);
+            await wait(110);
             return ret;
           }
           return remote.requestHandler(data);
@@ -876,7 +876,7 @@ describe("ObjectStore", () => {
             data["type"] === "request"
           ) {
             const ret = remote.requestHandler(data);
-            await setTimeout(110);
+            await wait(110);
             return ret;
           }
           return remote.requestHandler(data);
@@ -932,7 +932,7 @@ describe("ObjectStore", () => {
       await doGc();
       await doGc();
       expect(weakRef?.deref()).toEqual(undefined);
-      await setTimeout(200);
+      await wait(200);
       local.close();
     });
     test("do not delete object if it was resend in the meantime", async () => {
@@ -1101,7 +1101,7 @@ describe("ObjectStore", () => {
   });
   describe("newMessage", () => {
     test("should call newMessageHandler on requestHandler", () => {
-      const newMessageHandler = jest.fn();
+      const newMessageHandler = vi.fn();
       const os = new ObjectStore({
         async request() {
           return "";
