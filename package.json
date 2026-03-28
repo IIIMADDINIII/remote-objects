@@ -29,12 +29,11 @@
     "vite": "^8.0.3",
     "vitest": "^4.1.2",
     "@vitest/ui": "^4.1.2",
-    "@vitest/coverage-istanbul": "^4.1.2"
+    "@vitest/coverage-istanbul": "^4.1.2",
+    "rolldown": "^1.0.0-rc.12",
+    "rolldown-string": "^0.3.0"
   },
   "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ]
   },
   "dependencies": {
     "tslib": "^2.6.2"

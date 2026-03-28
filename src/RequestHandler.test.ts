@@ -16,7 +16,7 @@ function getRequestHandler(timeout?: number) {
       setTimeout(() => rh.newMessageHandler(data), 0);
     },
   }, timeout);
-  rh.on("error", () => {});
+  rh.on("error", () => { });
   return rh;
 }
 
@@ -37,9 +37,9 @@ function getFaultyRequestHandlerPair() {
 describe("RequestHandler", () => {
   describe("constructor", () => {
     test("should call setDisconnectedHandler ", () => {
-      let dh = () => {};
+      let dh = () => { };
       const rh = new RequestHandler({
-        async sendMessage() {},
+        async sendMessage() { },
         setDisconnectedHandler(disconnected) {
           dh = disconnected;
         },
@@ -47,9 +47,9 @@ describe("RequestHandler", () => {
       expect(rh.disconnectedHandler).toStrictEqual(dh);
     });
     test("should call setNewMessageHandler", () => {
-      let mh = (_a: any) => {};
+      let mh = (_a: any) => { };
       const rh = new RequestHandler({
-        async sendMessage() {},
+        async sendMessage() { },
         setNewMessageHandler(newMessage) {
           mh = newMessage;
         },
@@ -137,7 +137,7 @@ describe("RequestHandler", () => {
       rh.setRequestHandler(async (_request) => {
         return "test";
       });
-      setTestable(rh, "#lastRequestId", Number.MAX_SAFE_INTEGER - 1);
+      (rh as any)["lastRequestIdPrivate"] = Number.MAX_SAFE_INTEGER - 1;
       await expect(rh.request({})).resolves.toStrictEqual("test");
     });
     test("test handling, if nextid is still in use", async () => {
@@ -147,7 +147,7 @@ describe("RequestHandler", () => {
         return "test";
       });
       let firstRequest = rh.request({});
-      setTestable(rh, "#lastRequestId", 0);
+      (rh as any)["lastRequestIdPrivate"] = 0;
       await expect(rh.request({})).resolves.toStrictEqual("test");
       await expect(firstRequest).resolves.toStrictEqual("test");
     });
@@ -199,7 +199,7 @@ describe("RequestHandler", () => {
     test("should call disconnectedHandler on Parent and MessageHandler", () => {
       const messageCallback = vi.fn();
       const rh = new RequestHandler({
-        async sendMessage() {},
+        async sendMessage() { },
         disconnectedHandler: messageCallback,
       });
       const callback = vi.fn();
@@ -215,7 +215,7 @@ describe("RequestHandler", () => {
     });
     test("Open Requests should be handled", async () => {
       const rh = new RequestHandler({
-        async sendMessage() {},
+        async sendMessage() { },
       });
       const request = rh.request("test");
       rh.close();
@@ -225,7 +225,7 @@ describe("RequestHandler", () => {
   describe("on", () => {
     test("can be called with some thing other than error", async () => {
       const rh = getRequestHandler();
-      rh.on("test", () => {});
+      rh.on("test", () => { });
     });
     test("if no error is registered, console.log happens", async () => {
       try {
@@ -266,11 +266,11 @@ describe("RequestHandler", () => {
   describe("off", () => {
     test("calling off with something else than error has no effect", async () => {
       const rh = getRequestHandler();
-      rh.off("test", () => {});
+      rh.off("test", () => { });
     });
     test("removing an unknown listener has no effect", async () => {
       const rh = getRequestHandler();
-      rh.removeEventListener("error", () => {});
+      rh.removeEventListener("error", () => { });
     });
     test("listener can be removed again", async () => {
       const rh = getRequestHandler();

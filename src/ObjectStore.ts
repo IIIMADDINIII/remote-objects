@@ -145,7 +145,7 @@ export class ObjectStore {
     if (requestHandler.setDisconnectedHandler) {
       requestHandler.setDisconnectedHandler(this.disconnectedHandler);
     }
-    if (options.doNotSyncGc) this.#finalizationRegister = () => {};
+    if (options.doNotSyncGc) this.#finalizationRegister = () => { };
     else {
       const reg = new FinalizationRegistry<number>((id) =>
         this.#cleanupObject(id)
@@ -173,8 +173,7 @@ export class ObjectStore {
     }
     if (this.#descFromLocalValue.has(value)) {
       throw new Error(
-        `Remote Object is already exposed as ${
-          this.#descFromLocalValue.get(value)?.id
+        `Remote Object is already exposed as ${this.#descFromLocalValue.get(value)?.id
         }.`,
       );
     }
@@ -197,7 +196,7 @@ export class ObjectStore {
     id: string,
   ): Promise<RemoteObject<T>> {
     this.#checkClosed();
-    return <RemoteObject<T>> await this.#requestValue({ type: "root", id });
+    return <RemoteObject<T>>await this.#requestValue({ type: "root", id });
   }
 
   /**
@@ -213,7 +212,7 @@ export class ObjectStore {
     id: string,
   ): RemoteObject<T> {
     this.#checkClosed();
-    return <RemoteObject<T>> this.#createRemoteProxy({ type: "root", id });
+    return <RemoteObject<T>>this.#createRemoteProxy({ type: "root", id });
   }
 
   /**
@@ -243,7 +242,7 @@ export class ObjectStore {
   close(): void {
     if (this.#closed) return;
     this.#closed = true;
-    this.#requestHandler.request({ type: "close" }).catch(() => {});
+    this.#requestHandler.request({ type: "close" }).catch(() => { });
     this.#deletedRemoteIds.clear();
     this.#valueFromRemoteStringId.clear();
     this.#valueFromRemoteNumberId.clear();
@@ -280,10 +279,10 @@ export class ObjectStore {
         return this.close(), "";
       case "request":
         return await this.#requestValueHandler(
-          <ValueRequestDescription> request,
+          <ValueRequestDescription>request,
         );
       case "syncGcRequest":
-        return this.#syncGcHandler(<SyncGcRequest> request);
+        return this.#syncGcHandler(<SyncGcRequest>request);
       default:
         throw new Error(
           "request is not a message from Remote ObjectStore because it has a unknown value in the type field.",
@@ -420,7 +419,7 @@ export class ObjectStore {
           }
         }
       }
-    } catch {}
+    } catch { }
   }
 
   /**
@@ -681,8 +680,8 @@ export class ObjectStore {
     if (old !== undefined) {
       const oldDescription =
         (this.#getProxyData(old) as RootPathSegment | undefined)?.description as
-          | ResolvedObjectDescription
-          | undefined;
+        | ResolvedObjectDescription
+        | undefined;
       await this.#resolveObjectDescription(desc, oldDescription);
       return old;
     }
@@ -708,7 +707,7 @@ export class ObjectStore {
       getOwnPropertyDescriptor(
         _target: unknown,
         property: string | symbol,
-      ): { configurable: true; enumerable: boolean } | undefined {
+      ): { configurable: true; enumerable: boolean; } | undefined {
         return description.ownKeys.get(property);
       },
     });
@@ -752,8 +751,8 @@ export class ObjectStore {
     if (old !== undefined) {
       const oldDescription =
         (this.#getProxyData(old) as RootPathSegment | undefined)?.description as
-          | ResolvedFunctionDescription
-          | undefined;
+        | ResolvedFunctionDescription
+        | undefined;
       await this.#resolveFunctionDescription(desc, oldDescription);
       return old;
     }
@@ -783,7 +782,7 @@ export class ObjectStore {
         _target: unknown,
         property: string | symbol,
       ):
-        | { configurable: boolean; enumerable: boolean; writable?: boolean }
+        | { configurable: boolean; enumerable: boolean; writable?: boolean; }
         | undefined {
         if (functionWithPrototype && property === "prototype") {
           return { configurable: false, enumerable: false, writable: true };
@@ -1242,7 +1241,7 @@ export class ObjectStore {
   async #createOwnKeysMap(
     ownKeys: OwnKeyDescription[],
   ): Promise<
-    Map<string | symbol, { configurable: true; enumerable: boolean }>
+    Map<string | symbol, { configurable: true; enumerable: boolean; }>
   > {
     return new Map(
       await Promise.all(
@@ -1262,7 +1261,7 @@ export class ObjectStore {
    * @returns the internal Data of the Proxy or undefined if value is not a Proxy.
    */
   #getProxyData(value: Function | object): ExtendableRemotePath | undefined {
-    return (<MayHaveSymbol<ExtendableRemotePath>> value)[this.#symbolProxyData];
+    return (<MayHaveSymbol<ExtendableRemotePath>>value)[this.#symbolProxyData];
   }
 
   /**
@@ -1362,7 +1361,7 @@ function createError(description: ErrorDescription, cause: unknown): unknown {
       error.stack += "\n\nRemote Stacktrace:\n" + description.stack;
     }
   }
-  (<MayHaveSymbol<() => string>> <unknown> error)[Symbol.toStringTag] = () =>
+  (<MayHaveSymbol<() => string>><unknown>error)[Symbol.toStringTag] = () =>
     "Error";
   Object.setPrototypeOf(error, Object.getPrototypeOf(cause));
   return error;
@@ -1381,12 +1380,12 @@ const nullDescription: NullDescription = { type: "null" };
 /**
  * A callable used for Proxies.
  */
-const callableDefinition: Function = () => {};
+const callableDefinition: Function = () => { };
 
 /**
  * A Function used for Proxies.
  */
-const functionDefinition: Function = function () {};
+const functionDefinition: Function = function () { };
 
 /**
  * Definition of all unsupported handlers.
