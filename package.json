@@ -1,6 +1,6 @@
 {
   "name": "@iiimaddiniii/remote-objects",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "A library wich enables the usage of JS-Objects across an communication interface",
   "publishConfig": {
     "access": "public"
@@ -32,8 +32,7 @@
     "@vitest/coverage-istanbul": "^4.1.2",
     "rolldown-plugin-access-privates": "^0.1.2"
   },
-  "pnpm": {
-  },
+  "pnpm": {},
   "dependencies": {
     "tslib": "^2.6.2"
   }
