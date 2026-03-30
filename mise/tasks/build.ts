@@ -10,5 +10,5 @@ export const build = task("Build project", async (ctx) => {
 });
 
 if (import.meta.main) {
-  await build(new Ctx());
+  Ctx.run(build);
 }

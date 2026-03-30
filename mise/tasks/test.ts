@@ -12,5 +12,5 @@ export const test = task("Run tests", async (ctx) => {
 });
 
 if (import.meta.main) {
-  await test(new Ctx());
+  Ctx.run(test);
 }

@@ -30,8 +30,7 @@
     "vitest": "^4.1.2",
     "@vitest/ui": "^4.1.2",
     "@vitest/coverage-istanbul": "^4.1.2",
-    "rolldown": "^1.0.0-rc.12",
-    "rolldown-string": "^0.3.0"
+    "rolldown-plugin-access-privates": "^0.1.0"
   },
   "pnpm": {
   },

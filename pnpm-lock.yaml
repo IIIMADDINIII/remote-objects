@@ -21,12 +21,9 @@ importers:
       '@vitest/ui':
         specifier: ^4.1.2
         version: 4.1.2(vitest@4.1.2)
-      rolldown:
-        specifier: ^1.0.0-rc.12
-        version: 1.0.0-rc.12
-      rolldown-string:
-        specifier: ^0.3.0
-        version: 0.3.0(rolldown@1.0.0-rc.12)
+      rolldown-plugin-access-privates:
+        specifier: ^0.1.0
+        version: 0.1.0(rolldown@1.0.0-rc.12)(vite@8.0.3)
       vite:
         specifier: ^8.0.3
         version: 8.0.3(@vitejs/devtools@0.1.11)(jiti@2.6.1)
@@ -908,6 +905,15 @@ packages:
   readdirp@5.0.0:
     resolution: {integrity: sha512-9u/XQ1pvrQtYyMpZe7DXKv2p5CNvyVwzUB6uhLAnQwHMSgKMBR62lc7AHljaeteeHXn11XTAaLLUVZYVZyuRBQ==}
     engines: {node: '>= 20.19.0'}
+
+  rolldown-plugin-access-privates@0.1.0:
+    resolution: {integrity: sha512-hNAD6mYeZ0huCZZbOQwc62brWdG6kRKKH/2CiO1sPUZvgcXZaVwM9nfPagfWtUU/S6eD3+UO9zuBuk668f/R+g==}
+    peerDependencies:
+      rolldown: '>=1.0.0-rc.12'
+      vite: '*'
+    peerDependenciesMeta:
+      vite:
+        optional: true
 
   rolldown-string@0.3.0:
     resolution: {integrity: sha512-qGhBPNSv/27uzFBQdO+Cs4YAXC/1PKznD7Jz5Fl7NIAIlteuTPBTBWBhCpJ2AFTqLsoKvvUr7wSjqSUip0Fkpg==}
@@ -2257,6 +2263,14 @@ snapshots:
 
   readdirp@5.0.0:
     optional: true
+
+  rolldown-plugin-access-privates@0.1.0(rolldown@1.0.0-rc.12)(vite@8.0.3):
+    dependencies:
+      rolldown: 1.0.0-rc.12
+      rolldown-string: 0.3.0(rolldown@1.0.0-rc.12)
+      tslib: 2.8.1
+    optionalDependencies:
+      vite: 8.0.3(@vitejs/devtools@0.1.11)(jiti@2.6.1)
 
   rolldown-string@0.3.0(rolldown@1.0.0-rc.12):
     dependencies:

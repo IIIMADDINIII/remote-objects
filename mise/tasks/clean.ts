@@ -6,5 +6,5 @@ import { cleanup, Ctx } from "./common.ts";
 export const clean = cleanup.gitIgnored;
 
 if (import.meta.main) {
-  await clean(new Ctx());
+  Ctx.run(clean);
 }

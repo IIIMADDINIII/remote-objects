@@ -15,5 +15,5 @@ export const buildCi = task("Build CI", async (ctx) => {
 });
 
 if (import.meta.main) {
-  await buildCi(new Ctx());
+  Ctx.run(buildCi);
 }
