@@ -1,7 +1,14 @@
 import { describe, expect, test, vi } from "vitest";
 import type { RequestHandlerFunction } from "./Interfaces.js";
 import { isProxy, ObjectStore } from "./ObjectStore.js";
-import type { MayHaveSymbol, ObjectStoreOptions } from "./types.js";
+import type { MayHaveSymbol, ObjectStoreOptions, Remote } from "./types.js";
+
+// Seclarations for the Garbage Collector Node api.
+declare global {
+  const global: {
+    gc(): void;
+  };
+}
 
 /**
  * Waits for the specified number of milliseconds.
@@ -909,7 +916,7 @@ describe("ObjectStore", () => {
             typeof data === "object" && "type" in data &&
             data["type"] === "syncGcRequest"
           ) {
-            await setTimeout(250);
+            await wait(250);
             const ret = remote.requestHandler(data);
             return ret;
           }
@@ -949,7 +956,7 @@ describe("ObjectStore", () => {
             data["type"] === "syncGcRequest"
           ) {
             const ret = remote.requestHandler(data);
-            await setTimeout(20);
+            await wait(20);
             return ret;
           }
           if (
@@ -979,7 +986,7 @@ describe("ObjectStore", () => {
       expect(weakRef?.deref()).not.toEqual(undefined);
       await doGc();
       expect(weakRef?.deref()).toEqual(undefined);
-      await setTimeout(200);
+      await wait(200);
       local.close();
     });
     test("testing id wrapping", async () => {
