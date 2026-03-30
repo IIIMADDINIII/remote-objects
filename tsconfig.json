@@ -1,6 +1,6 @@
 {
   "include": [
-    "./src/**/*"
+    "./src/index.ts",
   ],
   // Visit https://aka.ms/tsconfig to read more about this file
   "compilerOptions": {
@@ -12,7 +12,8 @@
     // See also https://aka.ms/tsconfig/module
     "module": "nodenext",
     "target": "esnext",
-    "types": [],
+    "types": ["./declarations.d.ts"],
+    "lib": ["esnext"],
 
     // Other Outputs
     "sourceMap": true,

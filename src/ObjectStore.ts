@@ -1343,16 +1343,17 @@ function getAllKeys(object: {}): (string | symbol)[] {
  * @returns an Error Object.
  */
 function createError(description: ErrorDescription, cause: unknown): unknown {
-  if (
-    description.message === undefined && description.stack === undefined &&
-    description.name === undefined
-  ) return cause;
-  const error = new Error(description.message, { cause });
+  if (!isProxy(cause)) {
+    return cause;
+  }
+  const error = new Error(description.message ?? "Unknown error", { cause });
   if (description.name !== undefined) {
     if (error.stack !== undefined && error.stack.startsWith(error.name)) {
       error.stack = description.name + error.stack.slice(error.name.length);
     }
     error.name = description.name;
+  } else {
+    error.name = error.name;
   }
   if (description.stack !== undefined) {
     if (error.stack === undefined) {
@@ -1360,9 +1361,10 @@ function createError(description: ErrorDescription, cause: unknown): unknown {
     } else {
       error.stack += "\n\nRemote Stacktrace:\n" + description.stack;
     }
+  } else {
+    (error.stack as string | undefined) = error.stack;
   }
-  (<MayHaveSymbol<() => string>><unknown>error)[Symbol.toStringTag] = () =>
-    "Error";
+  (<MayHaveSymbol<() => string>><unknown>error)[Symbol.toStringTag] = () => "Error";
   Object.setPrototypeOf(error, Object.getPrototypeOf(cause));
   return error;
 }
@@ -1380,11 +1382,13 @@ const nullDescription: NullDescription = { type: "null" };
 /**
  * A callable used for Proxies.
  */
+// istanbul ignore next
 const callableDefinition: Function = () => { };
 
 /**
  * A Function used for Proxies.
  */
+// istanbul ignore next
 const functionDefinition: Function = function () { };
 
 /**

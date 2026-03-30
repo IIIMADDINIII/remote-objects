@@ -564,6 +564,50 @@ describe("ObjectStore", () => {
         Error = backup;
       }
     });
+    test("An error without message, stack, and/or name should not throw", async () => {
+      class StrippedError extends Error {
+        constructor() {
+          super("test");
+          (this as any).message = undefined;
+          (this as any).name = undefined;
+          (this as any).stack = undefined;
+        }
+      }
+      class ErrorOnlyWithMessage extends Error {
+        constructor() {
+          super("test");
+          (this as any).stack = undefined;
+          (this as any).name = undefined;
+        }
+      }
+      const api = {
+        stripped() {
+          throw new StrippedError();
+        },
+        message() {
+          throw new ErrorOnlyWithMessage();
+        },
+      };
+      const [remote, local] = getObjectStorePair();
+      remote.exposeRemoteObject("test", api);
+      const a = local.getRemoteObject<typeof api>("test");
+      try {
+        await a.stripped();
+      } catch (error: any) {
+        expect(error.message).toEqual("Unknown error");
+        expect(error.name).toMatch("Error");
+        expect(error.stack).toMatch("Error");
+      }
+      try {
+        await a.message();
+      } catch (error: any) {
+        expect(error.message).toEqual("test");
+        expect(error.name).toMatch("Error");
+        expect(error.stack).toMatch("Error");
+      }
+      local.close();
+      remote.close();
+    });
     test("callbacks should work", async () => {
       class Base {
         a: number;
@@ -738,6 +782,51 @@ describe("ObjectStore", () => {
       expect(weakRef?.deref()).toEqual(undefined);
       local.close();
     });
+    test("syncGc is triggered  only once when triggered multiple times by object count", async () => {
+      class Test1234 { }
+      let weakRef: WeakRef<{}> | undefined;
+      const api = {
+        test() {
+          const o = new Test1234();
+          weakRef = new WeakRef(o);
+          return o;
+        },
+      };
+      let counter = 0;
+      const local: ObjectStore = new ObjectStore({
+        async request(data) {
+          if (
+            typeof data === "object" && "type" in data &&
+            data["type"] === "syncGcRequest"
+          ) counter++;
+          return remote.requestHandler(data);
+        },
+      }, {
+        scheduleGcAfterObjectCount: 3,
+        scheduleGcAfterTime: 0,
+        requestLatency: 5,
+      });
+      const remote: ObjectStore = new ObjectStore({
+        request: (data) => local.requestHandler(data),
+      }, {
+        scheduleGcAfterObjectCount: 3,
+        scheduleGcAfterTime: 0,
+        requestLatency: 5,
+      });
+      remote.exposeRemoteObject("test", api);
+      const a = local.getRemoteObject<typeof api>("test");
+      let o: unknown[] | undefined = await Promise.all(
+        (Array.from({ length: 100 })).map(() => a.test()),
+      );
+      await doGc();
+      expect(weakRef?.deref()).not.toEqual(undefined);
+      o.length = 0;
+      counter = 0;
+      await doGc();
+      expect(counter).toEqual(1);
+      expect(weakRef?.deref()).toEqual(undefined);
+      local.close();
+    });
     test("Do Not garbage collect if it is in request Latency", async () => {
       class Test1234 { }
       let weakRef: WeakRef<{}> | undefined;
@@ -826,6 +915,42 @@ describe("ObjectStore", () => {
       expect(weakRef?.deref()).toEqual(undefined);
       local.close();
     });
+    test("syncGc should work even if a request is massively delayed", async () => {
+      class Test1234 {
+        a: number = 10;
+      }
+      const api = {
+        async test(_: Remote<Test1234>) {
+          return 10;
+        },
+      };
+      const local: ObjectStore = new ObjectStore({
+        async request(data) {
+          if (
+            typeof data === "object" && "type" in data &&
+            data["type"] === "request"
+          ) await wait(110);
+          return remote.requestHandler(data);
+        },
+      }, { scheduleGcAfterTime: 10, requestLatency: 5 });
+      const remote: ObjectStore = new ObjectStore({
+        request: (data) => local.requestHandler(data),
+      }, { scheduleGcAfterTime: 10, requestLatency: 5 });
+      remote.exposeRemoteObject("test", api);
+      const a = local.getRemoteObject<typeof api>("test");
+      let weakRef: WeakRef<{}> | undefined;
+      async function test() {
+        const t = new Test1234();
+        weakRef = new WeakRef(t);
+        await a.test(t);
+      }
+      test().then(() => { });
+      expect(weakRef?.deref()).not.toEqual(undefined);
+      await wait(130);
+      await doGc();
+      expect(weakRef?.deref()).toEqual(undefined);
+      local.close();
+    });
     test("syncGc should work even if a response is delayed", async () => {
       class Test1234 {
         a: number = 10;
@@ -864,7 +989,7 @@ describe("ObjectStore", () => {
       b = undefined;
       local.close();
     });
-    test("syncGc should object wich was collected is no longer accessible from remote", async () => {
+    test("syncGc should error when object was collected is no longer accessible from remote", async () => {
       class Test1234 {
         a: number = 10;
       }
@@ -1002,6 +1127,24 @@ describe("ObjectStore", () => {
       await a.test();
       await a.test();
       await a.test();
+      local.close();
+    });
+    test("testing id not being reused", async () => {
+      const api = {
+        test() {
+          return {};
+        },
+      };
+      const [remote, local] = getObjectStorePair();
+      remote.exposeRemoteObject("test", api);
+      const a = local.getRemoteObject<typeof api>("test");
+      (remote as any)["lastIdPrivate"] = 0;
+      await a.test();
+      (remote as any)["lastIdPrivate"] = 0;
+      await a.test();
+      (remote as any)["lastIdPrivate"] = 0;
+      await a.test();
+      expect((remote as any)["lastIdPrivate"]).toEqual(4);
       local.close();
     });
     // Unsupported Proxy Handlers
@@ -1204,8 +1347,7 @@ describe("ObjectStore", () => {
         },
       });
       const api = {
-        log(value: symbol) {
-          console.log(value);
+        log(_value: symbol) {
         },
       };
       remote.exposeRemoteObject("test", api);
