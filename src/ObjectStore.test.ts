@@ -1,4 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
+
 import type { RequestHandlerFunction } from "./Interfaces.js";
 import { isProxy, ObjectStore } from "./ObjectStore.js";
 import type { MayHaveSymbol, ObjectStoreOptions, Remote } from "./types.js";
@@ -12,6 +13,7 @@ declare global {
 
 /**
  * Waits for the specified number of milliseconds.
+ *
  * @param ms The number of milliseconds to wait.
  * @returns A promise that resolves after the specified time.
  */
@@ -33,29 +35,31 @@ describe("isProxy", () => {
     expect(isProxy(null)).toEqual(false);
     expect(isProxy(new Proxy({}, {}))).toEqual(false);
     expect(isProxy({})).toEqual(false);
-    expect(isProxy(() => { })).toEqual(false);
+    expect(isProxy(() => {})).toEqual(false);
     expect(isProxy("test")).toEqual(false);
     os.close();
   });
 });
 describe("ObjectStore", () => {
-  function getObjectStorePair(
-    options: ObjectStoreOptions = {},
-  ): [ObjectStore, ObjectStore] {
-    const a: ObjectStore = new ObjectStore({
-      request: (data) => b.requestHandler(data),
-    }, options);
-    const b: ObjectStore = new ObjectStore({
-      request: (data) => a.requestHandler(data),
-    }, options);
+  function getObjectStorePair(options: ObjectStoreOptions = {}): [ObjectStore, ObjectStore] {
+    const a: ObjectStore = new ObjectStore(
+      {
+        request: (data) => b.requestHandler(data),
+      },
+      options,
+    );
+    const b: ObjectStore = new ObjectStore(
+      {
+        request: (data) => a.requestHandler(data),
+      },
+      options,
+    );
     return [a, b];
   }
 
   async function doGc(delay: number = 50) {
     if (!global.gc) {
-      throw new Error(
-        "This test needs to be run with --expose-gc node Option",
-      );
+      throw new Error("This test needs to be run with --expose-gc node Option");
     }
     global.gc();
     await wait(delay);
@@ -63,7 +67,7 @@ describe("ObjectStore", () => {
     await wait(delay);
   }
 
-  function use(_: unknown) { }
+  function use(_: unknown) {}
 
   describe("constructor", () => {
     test("should call setRequestHandler and ", () => {
@@ -76,7 +80,9 @@ describe("ObjectStore", () => {
         setDisconnectedHandler: dh,
         setRequestHandler: rh,
       });
+      // oxlint-disable-next-line typescript/unbound-method
       expect(dh).calledOnceWith(os.disconnectedHandler);
+      // oxlint-disable-next-line typescript/unbound-method
       expect(rh).calledOnceWith(os.requestHandler);
       os.close();
     });
@@ -168,17 +174,19 @@ describe("ObjectStore", () => {
       local.close();
     });
     test("option 'noToString' should cause an error when converting RemoteObject to string", () => {
-      const os = new ObjectStore({
-        async request() {
-          return "";
+      const os = new ObjectStore(
+        {
+          async request() {
+            return "";
+          },
         },
-      }, { noToString: true });
-      const a = os.getRemoteObject("test");
-      expect(() => a + "").toThrow(
-        "Cannot convert object to primitive value",
+        { noToString: true },
       );
-      expect(isProxy((a as MayHaveSymbol<() => string>)[Symbol.toStringTag]))
-        .toEqual(true);
+      const a = os.getRemoteObject("test");
+      // oxlint-disable-next-line typescript/no-base-to-string
+      expect(() => a + "").toThrow("Cannot convert object to primitive value");
+      expect(isProxy((a as MayHaveSymbol<() => string>)[Symbol.toStringTag])).toEqual(true);
+      // oxlint-disable-next-line typescript/unbound-method
       expect(isProxy(a.toString)).toEqual(true);
       os.close();
     });
@@ -186,12 +194,15 @@ describe("ObjectStore", () => {
       const request = vi.fn(async () => {
         return {};
       });
-      const os = new ObjectStore({ request }, {
-        doNotSyncGc: true,
-        scheduleGcAfterTime: 10,
-      });
+      const os = new ObjectStore(
+        { request },
+        {
+          doNotSyncGc: true,
+          scheduleGcAfterTime: 10,
+        },
+      );
       await wait(100);
-      expect(request).not.called;
+      expect(request).toHaveBeenCalledTimes(0);
       os.close();
     });
   });
@@ -204,19 +215,15 @@ describe("ObjectStore", () => {
       });
       const api = {};
       os.exposeRemoteObject("test", api);
-      expect(() => os.exposeRemoteObject("test", {})).toThrow(
-        "Remote Object with id test is already exposed.",
-      );
-      expect(() => os.exposeRemoteObject("test2", api)).toThrow(
-        "Remote Object is already exposed as test.",
-      );
+      expect(() => os.exposeRemoteObject("test", {})).toThrow("Remote Object with id test is already exposed.");
+      expect(() => os.exposeRemoteObject("test2", api)).toThrow("Remote Object is already exposed as test.");
       os.close();
     });
     test("exposed api should be accessible with requestRemoteObject", async () => {
       const [remote, local] = getObjectStorePair();
       class cl {
         static a: number = 10;
-        fn() { }
+        fn() {}
       }
       const api = { test: 10 };
       remote.exposeRemoteObject("test", api);
@@ -225,35 +232,23 @@ describe("ObjectStore", () => {
       const c = await local.requestRemoteObject<typeof cl>("cl");
       expect(typeof value).toEqual("object");
       expect(typeof Object.getPrototypeOf(value)).toEqual("object");
-      expect(Object.getPrototypeOf(Object.getPrototypeOf(value))).toEqual(
-        null,
-      );
-      expect([...Object.keys(value)]).toEqual(["test"]);
+      expect(Object.getPrototypeOf(Object.getPrototypeOf(value))).toEqual(null);
+      expect(Object.keys(value)).toEqual(["test"]);
       expect("test" in value).toEqual(true);
       expect(typeof c).toEqual("function");
       expect(typeof Object.getPrototypeOf(c)).toEqual("object");
-      expect(typeof Object.getPrototypeOf(Object.getPrototypeOf(c))).toEqual(
-        "object",
-      );
-      expect(
-        Object.getPrototypeOf(
-          Object.getPrototypeOf(Object.getPrototypeOf(c)),
-        ),
-      ).toEqual(null);
-      expect([...Object.keys(c)]).toEqual(["a"]);
+      expect(typeof Object.getPrototypeOf(Object.getPrototypeOf(c))).toEqual("object");
+      expect(Object.getPrototypeOf(Object.getPrototypeOf(Object.getPrototypeOf(c)))).toEqual(null);
+      expect(Object.keys(c)).toEqual(["a"]);
       expect("a" in c).toEqual(true);
-      expect(c.prototype).toEqual(
-        expect.objectContaining({ fn: expect.anything() }),
-      );
+      expect(c.prototype).toEqual(expect.objectContaining({ fn: expect.anything() }));
       local.close();
     });
   });
   describe("requestRemoteObject", () => {
     test("should fail if remote object does not exist", async () => {
       const [_, local] = getObjectStorePair();
-      await expect(local.requestRemoteObject("test")).rejects.toThrow(
-        "Object with id test is unknown.",
-      );
+      await expect(local.requestRemoteObject("test")).rejects.toThrow("Object with id test is unknown.");
       local.close();
     });
     test("should return exact same Proxy for the same id", async () => {
@@ -293,59 +288,47 @@ describe("ObjectStore", () => {
       const [remote, local] = getObjectStorePair();
       remote.exposeRemoteObject("test", api);
       const a = await local.requestRemoteObject<typeof api>("test");
-      expect(() => Object.defineProperty(a, "b", {})).toThrow(
-        "'defineProperty' on proxy: trap returned falsish for property 'b'",
-      );
+      expect(() => Object.defineProperty(a, "b", {})).toThrow("'defineProperty' on proxy: trap returned falsish for property 'b'");
       local.close();
     });
     test("deleteProperty should fail", async () => {
-      const api: { a?: number; } = { a: 10 };
+      const api: { a?: number } = { a: 10 };
       const [remote, local] = getObjectStorePair();
       remote.exposeRemoteObject("test", api);
       const a = await local.requestRemoteObject<typeof api>("test");
-      expect(() => delete a.a).toThrow(
-        "'deleteProperty' on proxy: trap returned falsish for property 'a'",
-      );
+      expect(() => delete a.a).toThrow("'deleteProperty' on proxy: trap returned falsish for property 'a'");
       local.close();
     });
     test("isExtensible should fail", async () => {
-      const api: { a?: number; } = { a: 10 };
+      const api: { a?: number } = { a: 10 };
       const [remote, local] = getObjectStorePair();
       remote.exposeRemoteObject("test", api);
       const a = await local.requestRemoteObject<typeof api>("test");
-      expect(() => Object.isExtensible(a)).toThrow(
-        "isExtensible is not Supported by RemoteObject",
-      );
+      expect(() => Object.isExtensible(a)).toThrow("isExtensible is not Supported by RemoteObject");
       local.close();
     });
     test("preventExtensions should fail", async () => {
-      const api: { a?: number; } = { a: 10 };
+      const api: { a?: number } = { a: 10 };
       const [remote, local] = getObjectStorePair();
       remote.exposeRemoteObject("test", api);
       const a = await local.requestRemoteObject<typeof api>("test");
-      expect(() => Object.preventExtensions(a)).toThrow(
-        "'preventExtensions' on proxy: trap returned falsish",
-      );
+      expect(() => Object.preventExtensions(a)).toThrow("'preventExtensions' on proxy: trap returned falsish");
       local.close();
     });
     test("set should fail", async () => {
-      const api: { a?: number; } = { a: 10 };
+      const api: { a?: number } = { a: 10 };
       const [remote, local] = getObjectStorePair();
       remote.exposeRemoteObject("test", api);
       const a = await local.requestRemoteObject<typeof api>("test");
-      expect(() => a.a = 11 as any).toThrow(
-        "'set' on proxy: trap returned falsish for property 'a'",
-      );
+      expect(() => (a.a = 11 as any)).toThrow("'set' on proxy: trap returned falsish for property 'a'");
       local.close();
     });
     test("setPrototypeOf should fail", async () => {
-      const api: { a?: number; } = { a: 10 };
+      const api: { a?: number } = { a: 10 };
       const [remote, local] = getObjectStorePair();
       remote.exposeRemoteObject("test", api);
       const a = await local.requestRemoteObject<typeof api>("test");
-      expect(() => Object.setPrototypeOf(a, {})).toThrow(
-        "'setPrototypeOf' on proxy: trap returned falsish for property 'undefined'",
-      );
+      expect(() => Object.setPrototypeOf(a, {})).toThrow("'setPrototypeOf' on proxy: trap returned falsish for property 'undefined'");
       local.close();
     });
   });
@@ -356,13 +339,13 @@ describe("ObjectStore", () => {
       });
       const os = new ObjectStore({ request });
       const value = os.getRemoteObject("test");
-      expect(request).not.called;
+      expect(request).toHaveBeenCalledTimes(0);
       expect(typeof value).toEqual("function");
       os.close();
     });
     test("acquiring the same object twice should return the same Proxy", async () => {
       const [remote, local] = getObjectStorePair();
-      const api = { test: {}, fn() { } };
+      const api = { test: {}, fn() {} };
       remote.exposeRemoteObject("test", api);
       const value1 = await local.getRemoteObject<typeof api>("test").test;
       const value2 = await local.getRemoteObject<typeof api>("test").test;
@@ -380,8 +363,7 @@ describe("ObjectStore", () => {
         },
       };
       remote.exposeRemoteObject("test", api);
-      await expect(local.getRemoteObject<typeof api>("test").test()).rejects
-        .toEqual("test");
+      await expect(local.getRemoteObject<typeof api>("test").test()).rejects.toEqual("test");
       local.close();
     });
     test("getting primitive datatypes should work", async () => {
@@ -403,7 +385,7 @@ describe("ObjectStore", () => {
       expect(await a.bigInt).toEqual(12345678901234567890n);
       expect(await a.undefined).toEqual(undefined);
       expect(await a.null).toEqual(null);
-      expect(typeof await a.symbol).toEqual("symbol");
+      expect(typeof (await a.symbol)).toEqual("symbol");
       expect(await a.symbol).toEqual(await a.symbol);
       local.close();
     });
@@ -419,8 +401,8 @@ describe("ObjectStore", () => {
       const a = local.getRemoteObject<typeof api>("test");
       expect(typeof a.function()).toEqual("function");
       expect(typeof a.object).toEqual("function");
-      expect(typeof await a.function).toEqual("function");
-      expect(typeof await a.object).toEqual("object");
+      expect(typeof (await a.function)).toEqual("function");
+      expect(typeof (await a.object)).toEqual("object");
       expect(await a.function()).toEqual("test");
       expect(await a.object.value).toEqual(10);
       local.close();
@@ -447,12 +429,12 @@ describe("ObjectStore", () => {
       local.close();
     });
     test("constructing an instance should work", async () => {
-      let instance: any = undefined;
       class Test {
+        static instance: any = undefined;
         a: number;
         constructor(a: number) {
           this.a = a;
-          instance = this;
+          Test.instance = this;
         }
       }
       const api = { class: Test };
@@ -463,13 +445,13 @@ describe("ObjectStore", () => {
       const i = await new cl(11);
       expect(i instanceof cl).toEqual(true);
       expect(await i.a).toEqual(11);
-      expect(instance instanceof Test).toEqual(true);
-      expect(instance.a).toEqual(11);
+      expect(Test.instance instanceof Test).toEqual(true);
+      expect(Test.instance.a).toEqual(11);
       local.close();
     });
     test("instance of with parent class should work", async () => {
-      class Test { }
-      class Test2 extends Test { }
+      class Test {}
+      class Test2 extends Test {}
       const api = { Test: Test, Test2: Test2 };
       const [remote, local] = getObjectStorePair();
       remote.exposeRemoteObject("test", api);
@@ -494,7 +476,7 @@ describe("ObjectStore", () => {
           this.a = a;
         }
       }
-      class Test2 extends Test { }
+      class Test2 extends Test {}
       const api = { Test2: Test2 };
       const [remote, local] = getObjectStorePair();
       remote.exposeRemoteObject("test", api);
@@ -517,12 +499,8 @@ describe("ObjectStore", () => {
       const [remote, local] = getObjectStorePair();
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      await expect(async () => (a as any).set()).rejects.toThrow(
-        "Cannot write to a RemoteObject or Return Value. Only properties can be set.",
-      );
-      await expect(async () => new (a as any)().set()).rejects.toThrow(
-        "Cannot write to a RemoteObject or Return Value. Only properties can be set.",
-      );
+      await expect(async () => (a as any).set()).rejects.toThrow("Cannot write to a RemoteObject or Return Value. Only properties can be set.");
+      await expect(async () => new (a as any)().set()).rejects.toThrow("Cannot write to a RemoteObject or Return Value. Only properties can be set.");
       local.close();
     });
     test("if error has no Stacktrace only remote stack should be Returned", async () => {
@@ -532,8 +510,9 @@ describe("ObjectStore", () => {
         name: string = "test";
       } as any;
       try {
+        // oxlint-disable-next-line no-global-assign
         Error = fakeError;
-        expect((new Error()).stack).toEqual(undefined);
+        expect(new Error().stack).toEqual(undefined);
         const api = {
           fn() {
             throw new backup();
@@ -544,8 +523,10 @@ describe("ObjectStore", () => {
         });
         const local: ObjectStore = new ObjectStore({
           request: async (data) => {
+            // oxlint-disable-next-line no-global-assign
             Error = backup;
             const ret = await local.requestHandler(data);
+            // oxlint-disable-next-line no-global-assign
             Error = fakeError;
             return ret;
           },
@@ -555,12 +536,13 @@ describe("ObjectStore", () => {
         try {
           await a.fn();
         } catch (error: any) {
-          expect(error.stack).toMatch(/^Remote Stacktrace\:.*$/gm);
+          expect(error.stack).toMatch(/^Remote Stacktrace:.*$/gm);
           expect(error[Symbol.toStringTag]()).toEqual("Error");
         }
         local.close();
         remote.close();
       } finally {
+        // oxlint-disable-next-line no-global-assign
         Error = backup;
       }
     });
@@ -615,8 +597,8 @@ describe("ObjectStore", () => {
           this.a = a;
         }
       }
-      class RemoteClass extends Base { }
-      class LocalClass extends Base { }
+      class RemoteClass extends Base {}
+      class LocalClass extends Base {}
       const api = {
         sync(cb: (a: number) => number) {
           return cb(10);
@@ -631,12 +613,10 @@ describe("ObjectStore", () => {
           return new cl(10);
         },
         async asyncConstruct(cl: new (a: number) => Promise<Base>) {
-          return await (new cl(10));
+          return await new cl(10);
         },
         RemoteClass,
-        async callbackCallback(
-          cb: (cb: (a: number) => number) => Promise<number>,
-        ) {
+        async callbackCallback(cb: (cb: (a: number) => number) => Promise<number>) {
           return await cb((a) => a * 3);
         },
       };
@@ -644,8 +624,7 @@ describe("ObjectStore", () => {
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
       const tripple = (a: number) => a * 3;
-      const callback = async (cb: (a: number) => PromiseLike<number>) =>
-        await cb(10) * 2;
+      const callback = async (cb: (a: number) => PromiseLike<number>) => (await cb(10)) * 2;
       expect(await a.sync(a.double)).toEqual(20);
       expect(await a.async(a.double)).toEqual(20);
       expect(await a.async(tripple)).toEqual(30);
@@ -662,12 +641,13 @@ describe("ObjectStore", () => {
         },
       });
       const a = os.getRemoteObject("test");
+      // oxlint-disable-next-line typescript/no-base-to-string
       expect(a + "").toEqual("[object RemoteObject]");
       os.close();
     });
     test("should be able to get a symbol field from remote", async () => {
       const symbol = Symbol();
-      const api: { [symbol]: number; symbol: typeof symbol; } = {
+      const api: { [symbol]: number; symbol: typeof symbol } = {
         [symbol]: 10,
         symbol,
       };
@@ -680,7 +660,7 @@ describe("ObjectStore", () => {
     });
     test("should be able to set a symbol field from local", async () => {
       const symbol: symbol = Symbol();
-      const api: { [key: symbol]: number; } = {};
+      const api: { [key: symbol]: number } = {};
       const [remote, local] = getObjectStorePair();
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
@@ -731,7 +711,7 @@ describe("ObjectStore", () => {
       local.close();
     });
     test("remote value should be garbage collected when no longer in use", async () => {
-      class Test1234 { }
+      class Test1234 {}
       let weakRef: WeakRef<{}> | undefined;
       const api = {
         test() {
@@ -756,7 +736,7 @@ describe("ObjectStore", () => {
       local.close();
     });
     test("syncGc is triggered early because of object count", async () => {
-      class Test1234 { }
+      class Test1234 {}
       let weakRef: WeakRef<{}> | undefined;
       const api = {
         test() {
@@ -772,9 +752,7 @@ describe("ObjectStore", () => {
       });
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      let o: unknown[] | undefined = await Promise.all(
-        [0, 1, 2].map(() => a.test()),
-      );
+      let o: unknown[] | undefined = await Promise.all([0, 1, 2].map(async () => await a.test()));
       await doGc();
       expect(weakRef?.deref()).not.toEqual(undefined);
       o.length = 0;
@@ -783,7 +761,7 @@ describe("ObjectStore", () => {
       local.close();
     });
     test("syncGc is triggered  only once when triggered multiple times by object count", async () => {
-      class Test1234 { }
+      class Test1234 {}
       let weakRef: WeakRef<{}> | undefined;
       const api = {
         test() {
@@ -793,31 +771,32 @@ describe("ObjectStore", () => {
         },
       };
       let counter = 0;
-      const local: ObjectStore = new ObjectStore({
-        async request(data) {
-          if (
-            typeof data === "object" && "type" in data &&
-            data["type"] === "syncGcRequest"
-          ) counter++;
-          return remote.requestHandler(data);
+      const local: ObjectStore = new ObjectStore(
+        {
+          async request(data) {
+            if (typeof data === "object" && "type" in data && data["type"] === "syncGcRequest") counter++;
+            return remote.requestHandler(data);
+          },
         },
-      }, {
-        scheduleGcAfterObjectCount: 3,
-        scheduleGcAfterTime: 0,
-        requestLatency: 5,
-      });
-      const remote: ObjectStore = new ObjectStore({
-        request: (data) => local.requestHandler(data),
-      }, {
-        scheduleGcAfterObjectCount: 3,
-        scheduleGcAfterTime: 0,
-        requestLatency: 5,
-      });
+        {
+          scheduleGcAfterObjectCount: 3,
+          scheduleGcAfterTime: 0,
+          requestLatency: 5,
+        },
+      );
+      const remote: ObjectStore = new ObjectStore(
+        {
+          request: (data) => local.requestHandler(data),
+        },
+        {
+          scheduleGcAfterObjectCount: 3,
+          scheduleGcAfterTime: 0,
+          requestLatency: 5,
+        },
+      );
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      let o: unknown[] | undefined = await Promise.all(
-        (Array.from({ length: 100 })).map(() => a.test()),
-      );
+      let o: unknown[] | undefined = await Promise.all(Array.from({ length: 100 }).map(async () => await a.test()));
       await doGc();
       expect(weakRef?.deref()).not.toEqual(undefined);
       o.length = 0;
@@ -828,7 +807,7 @@ describe("ObjectStore", () => {
       local.close();
     });
     test("Do Not garbage collect if it is in request Latency", async () => {
-      class Test1234 { }
+      class Test1234 {}
       let weakRef: WeakRef<{}> | undefined;
       const api = {
         test() {
@@ -853,7 +832,7 @@ describe("ObjectStore", () => {
       local.close();
     });
     test("syncGc is not triggered when option 'doNotSyncGc' is set", async () => {
-      class Test1234 { }
+      class Test1234 {}
       let weakRef: WeakRef<{}> | undefined;
       const api = {
         test() {
@@ -870,9 +849,7 @@ describe("ObjectStore", () => {
       });
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      let o: unknown[] | undefined = await Promise.all(
-        [0, 1, 2].map(() => a.test()),
-      );
+      let o: unknown[] | undefined = await Promise.all([0, 1, 2].map(async () => await a.test()));
       await doGc();
       expect(weakRef?.deref()).not.toEqual(undefined);
       o.length = 0;
@@ -889,18 +866,21 @@ describe("ObjectStore", () => {
           return 10;
         },
       };
-      const local: ObjectStore = new ObjectStore({
-        async request(data) {
-          if (
-            typeof data === "object" && "type" in data &&
-            data["type"] === "request"
-          ) return new Promise(() => { });
-          return remote.requestHandler(data);
+      const local: ObjectStore = new ObjectStore(
+        {
+          async request(data) {
+            if (typeof data === "object" && "type" in data && data["type"] === "request") return new Promise(() => {});
+            return remote.requestHandler(data);
+          },
         },
-      }, { scheduleGcAfterTime: 10, requestLatency: 5 });
-      const remote: ObjectStore = new ObjectStore({
-        request: (data) => local.requestHandler(data),
-      }, { scheduleGcAfterTime: 10, requestLatency: 5 });
+        { scheduleGcAfterTime: 10, requestLatency: 5 },
+      );
+      const remote: ObjectStore = new ObjectStore(
+        {
+          request: (data) => local.requestHandler(data),
+        },
+        { scheduleGcAfterTime: 10, requestLatency: 5 },
+      );
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
       let weakRef: WeakRef<{}> | undefined;
@@ -909,7 +889,7 @@ describe("ObjectStore", () => {
         weakRef = new WeakRef(t);
         await a.test(t);
       }
-      test().then(() => { });
+      void test().then(() => {});
       expect(weakRef?.deref()).not.toEqual(undefined);
       await doGc();
       expect(weakRef?.deref()).toEqual(undefined);
@@ -924,18 +904,21 @@ describe("ObjectStore", () => {
           return 10;
         },
       };
-      const local: ObjectStore = new ObjectStore({
-        async request(data) {
-          if (
-            typeof data === "object" && "type" in data &&
-            data["type"] === "request"
-          ) await wait(110);
-          return remote.requestHandler(data);
+      const local: ObjectStore = new ObjectStore(
+        {
+          async request(data) {
+            if (typeof data === "object" && "type" in data && data["type"] === "request") await wait(110);
+            return remote.requestHandler(data);
+          },
         },
-      }, { scheduleGcAfterTime: 10, requestLatency: 5 });
-      const remote: ObjectStore = new ObjectStore({
-        request: (data) => local.requestHandler(data),
-      }, { scheduleGcAfterTime: 10, requestLatency: 5 });
+        { scheduleGcAfterTime: 10, requestLatency: 5 },
+      );
+      const remote: ObjectStore = new ObjectStore(
+        {
+          request: (data) => local.requestHandler(data),
+        },
+        { scheduleGcAfterTime: 10, requestLatency: 5 },
+      );
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
       let weakRef: WeakRef<{}> | undefined;
@@ -944,7 +927,7 @@ describe("ObjectStore", () => {
         weakRef = new WeakRef(t);
         await a.test(t);
       }
-      test().then(() => { });
+      void test().then(() => {});
       expect(weakRef?.deref()).not.toEqual(undefined);
       await wait(130);
       await doGc();
@@ -963,22 +946,25 @@ describe("ObjectStore", () => {
           return a;
         },
       };
-      const local: ObjectStore = new ObjectStore({
-        async request(data) {
-          if (
-            typeof data === "object" && "type" in data &&
-            data["type"] === "request"
-          ) {
-            const ret = remote.requestHandler(data);
-            await wait(110);
-            return ret;
-          }
-          return remote.requestHandler(data);
+      const local: ObjectStore = new ObjectStore(
+        {
+          async request(data) {
+            if (typeof data === "object" && "type" in data && data["type"] === "request") {
+              const ret = remote.requestHandler(data);
+              await wait(110);
+              return ret;
+            }
+            return remote.requestHandler(data);
+          },
         },
-      }, { scheduleGcAfterTime: 10, requestLatency: 5 });
-      const remote: ObjectStore = new ObjectStore({
-        request: (data) => local.requestHandler(data),
-      }, { scheduleGcAfterTime: 10, requestLatency: 5 });
+        { scheduleGcAfterTime: 10, requestLatency: 5 },
+      );
+      const remote: ObjectStore = new ObjectStore(
+        {
+          request: (data) => local.requestHandler(data),
+        },
+        { scheduleGcAfterTime: 10, requestLatency: 5 },
+      );
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
       let b: Remote<Test1234> | undefined = await a.test();
@@ -1001,56 +987,60 @@ describe("ObjectStore", () => {
           return a;
         },
       };
-      const local: ObjectStore = new ObjectStore({
-        async request(data) {
-          if (
-            typeof data === "object" && "type" in data &&
-            data["type"] === "request"
-          ) {
-            const ret = remote.requestHandler(data);
-            await wait(110);
-            return ret;
-          }
-          return remote.requestHandler(data);
+      const local: ObjectStore = new ObjectStore(
+        {
+          async request(data) {
+            if (typeof data === "object" && "type" in data && data["type"] === "request") {
+              const ret = remote.requestHandler(data);
+              await wait(110);
+              return ret;
+            }
+            return remote.requestHandler(data);
+          },
         },
-      }, { scheduleGcAfterTime: 10, requestLatency: 5 });
-      const remote: ObjectStore = new ObjectStore({
-        request: (data) => local.requestHandler(data),
-      }, { scheduleGcAfterTime: 10, requestLatency: 5 });
+        { scheduleGcAfterTime: 10, requestLatency: 5 },
+      );
+      const remote: ObjectStore = new ObjectStore(
+        {
+          request: (data) => local.requestHandler(data),
+        },
+        { scheduleGcAfterTime: 10, requestLatency: 5 },
+      );
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
       let b: Remote<Test1234> = await a.test();
       expect(weakRef?.deref()).not.toEqual(undefined);
       await doGc();
       expect(weakRef?.deref()).toEqual(undefined);
-      await expect(async () => await b.a).rejects.toThrow(
-        "Local Object with id 1 is unknown.",
-      );
+      await expect(async () => await b.a).rejects.toThrow("Local Object with id 1 is unknown.");
       local.close();
     });
     test("syncGc should work even if gcSync Request is Delayed", async () => {
-      class Test1234 { }
+      class Test1234 {}
       const api = {
         async test(_: Remote<Test1234>) {
           return 10;
         },
       };
-      const local: ObjectStore = new ObjectStore({
-        async request(data) {
-          if (
-            typeof data === "object" && "type" in data &&
-            data["type"] === "syncGcRequest"
-          ) {
-            await wait(250);
-            const ret = remote.requestHandler(data);
-            return ret;
-          }
-          return remote.requestHandler(data);
+      const local: ObjectStore = new ObjectStore(
+        {
+          async request(data) {
+            if (typeof data === "object" && "type" in data && data["type"] === "syncGcRequest") {
+              await wait(250);
+              const ret = remote.requestHandler(data);
+              return ret;
+            }
+            return remote.requestHandler(data);
+          },
         },
-      }, { scheduleGcAfterTime: 10, requestLatency: 5 });
-      const remote: ObjectStore = new ObjectStore({
-        request: (data) => local.requestHandler(data),
-      }, { scheduleGcAfterTime: 10, requestLatency: 5 });
+        { scheduleGcAfterTime: 10, requestLatency: 5 },
+      );
+      const remote: ObjectStore = new ObjectStore(
+        {
+          request: (data) => local.requestHandler(data),
+        },
+        { scheduleGcAfterTime: 10, requestLatency: 5 },
+      );
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
       let weakRef: WeakRef<{}> | undefined;
@@ -1068,32 +1058,36 @@ describe("ObjectStore", () => {
       local.close();
     });
     test("do not delete object if it was resend in the meantime", async () => {
-      class Test1234 { }
+      class Test1234 {}
       const api = {
         async test(_: Remote<Test1234> | undefined) {
           return 10;
         },
       };
-      const local: ObjectStore = new ObjectStore({
-        async request(data) {
-          if (
-            typeof data === "object" && "type" in data &&
-            data["type"] === "syncGcRequest"
-          ) {
-            const ret = remote.requestHandler(data);
-            await wait(20);
-            return ret;
-          }
-          if (
-            typeof data === "object" && "type" in data &&
-            data["type"] === "request"
-          ) return new Promise(() => { });
-          return remote.requestHandler(data);
+      const local: ObjectStore = new ObjectStore(
+        {
+          async request(data) {
+            if (typeof data === "object" && "type" in data && data["type"] === "syncGcRequest") {
+              const ret = remote.requestHandler(data);
+              await wait(20);
+              return ret;
+            }
+            if (typeof data === "object" && "type" in data && data["type"] === "request") {
+              await wait(50);
+              const ret = remote.requestHandler(data);
+              return ret;
+            }
+            return remote.requestHandler(data);
+          },
         },
-      }, { scheduleGcAfterTime: 10, requestLatency: 5 });
-      const remote: ObjectStore = new ObjectStore({
-        request: (data) => local.requestHandler(data),
-      }, { scheduleGcAfterTime: 10, requestLatency: 5 });
+        { scheduleGcAfterTime: 10, requestLatency: 5 },
+      );
+      const remote: ObjectStore = new ObjectStore(
+        {
+          request: (data) => local.requestHandler(data),
+        },
+        { scheduleGcAfterTime: 10, requestLatency: 5 },
+      );
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
       let weakRef: WeakRef<Test1234> | undefined;
@@ -1104,14 +1098,14 @@ describe("ObjectStore", () => {
         }
         await a.test(weakRef.deref());
       }
-      test();
+      const t1 = test();
       await doGc(5);
-      test();
+      const t2 = test();
       await doGc(5);
       expect(weakRef?.deref()).not.toEqual(undefined);
       await doGc();
       expect(weakRef?.deref()).toEqual(undefined);
-      await wait(200);
+      await Promise.all([t1, t2]);
       local.close();
     });
     test("testing id wrapping", async () => {
@@ -1153,9 +1147,7 @@ describe("ObjectStore", () => {
       const [remote, local] = getObjectStorePair();
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      expect(() => Object.getPrototypeOf(a)).toThrow(
-        "getPrototypeOf is not Supported by RemoteObject Proxy. Await the RemoteObject to be able to query metadata.",
-      );
+      expect(() => Object.getPrototypeOf(a)).toThrow("getPrototypeOf is not Supported by RemoteObject Proxy. Await the RemoteObject to be able to query metadata.");
       local.close();
     });
     test("has should fail", async () => {
@@ -1163,9 +1155,7 @@ describe("ObjectStore", () => {
       const [remote, local] = getObjectStorePair();
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      expect(() => "a" in a).toThrow(
-        "has is not Supported by RemoteObject Proxy. Await the RemoteObject to be able to query metadata.",
-      );
+      expect(() => "a" in a).toThrow("has is not Supported by RemoteObject Proxy. Await the RemoteObject to be able to query metadata.");
       local.close();
     });
     test("ownKeys should fail", async () => {
@@ -1173,9 +1163,7 @@ describe("ObjectStore", () => {
       const [remote, local] = getObjectStorePair();
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      expect(() => Object.getOwnPropertyNames(a)).toThrow(
-        "ownKeys is not Supported by RemoteObject Proxy. Await the RemoteObject to be able to query metadata.",
-      );
+      expect(() => Object.getOwnPropertyNames(a)).toThrow("ownKeys is not Supported by RemoteObject Proxy. Await the RemoteObject to be able to query metadata.");
       local.close();
     });
     test("getOwnPropertyDescriptor should fail", async () => {
@@ -1183,9 +1171,7 @@ describe("ObjectStore", () => {
       const [remote, local] = getObjectStorePair();
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      expect(() => Object.getOwnPropertyDescriptor(a, "a")).toThrow(
-        "getOwnPropertyDescriptor is not Supported by RemoteObject Proxy. Await the RemoteObject to be able to query metadata.",
-      );
+      expect(() => Object.getOwnPropertyDescriptor(a, "a")).toThrow("getOwnPropertyDescriptor is not Supported by RemoteObject Proxy. Await the RemoteObject to be able to query metadata.");
       local.close();
     });
     test("defineProperty should fail", async () => {
@@ -1193,59 +1179,47 @@ describe("ObjectStore", () => {
       const [remote, local] = getObjectStorePair();
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      expect(() => Object.defineProperty(a, "b", {})).toThrow(
-        "'defineProperty' on proxy: trap returned falsish for property 'b'",
-      );
+      expect(() => Object.defineProperty(a, "b", {})).toThrow("'defineProperty' on proxy: trap returned falsish for property 'b'");
       local.close();
     });
     test("deleteProperty should fail", async () => {
-      const api: { a?: number; } = { a: 10 };
+      const api: { a?: number } = { a: 10 };
       const [remote, local] = getObjectStorePair();
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      expect(() => delete a.a).toThrow(
-        "'deleteProperty' on proxy: trap returned falsish for property 'a'",
-      );
+      expect(() => delete a.a).toThrow("'deleteProperty' on proxy: trap returned falsish for property 'a'");
       local.close();
     });
     test("isExtensible should fail", async () => {
-      const api: { a?: number; } = { a: 10 };
+      const api: { a?: number } = { a: 10 };
       const [remote, local] = getObjectStorePair();
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      expect(() => Object.isExtensible(a)).toThrow(
-        "isExtensible is not Supported by RemoteObject",
-      );
+      expect(() => Object.isExtensible(a)).toThrow("isExtensible is not Supported by RemoteObject");
       local.close();
     });
     test("preventExtensions should fail", async () => {
-      const api: { a?: number; } = { a: 10 };
+      const api: { a?: number } = { a: 10 };
       const [remote, local] = getObjectStorePair();
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      expect(() => Object.preventExtensions(a)).toThrow(
-        "'preventExtensions' on proxy: trap returned falsish",
-      );
+      expect(() => Object.preventExtensions(a)).toThrow("'preventExtensions' on proxy: trap returned falsish");
       local.close();
     });
     test("set should fail", async () => {
-      const api: { a?: number; } = { a: 10 };
+      const api: { a?: number } = { a: 10 };
       const [remote, local] = getObjectStorePair();
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      expect(() => a.a = 11 as any).toThrow(
-        "'set' on proxy: trap returned falsish for property 'a'",
-      );
+      expect(() => (a.a = 11 as any)).toThrow("'set' on proxy: trap returned falsish for property 'a'");
       local.close();
     });
     test("setPrototypeOf should fail", async () => {
-      const api: { a?: number; } = { a: 10 };
+      const api: { a?: number } = { a: 10 };
       const [remote, local] = getObjectStorePair();
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      expect(() => Object.setPrototypeOf(a, {})).toThrow(
-        "'setPrototypeOf' on proxy: trap returned falsish for property 'undefined'",
-      );
+      expect(() => Object.setPrototypeOf(a, {})).toThrow("'setPrototypeOf' on proxy: trap returned falsish for property 'undefined'");
       local.close();
     });
   });
@@ -1268,9 +1242,7 @@ describe("ObjectStore", () => {
           return "";
         },
       });
-      expect(() => os.newMessage("test")).toThrow(
-        "Function is not Implemented by requestHandler",
-      );
+      expect(() => os.newMessage("test")).toThrow("Function is not Implemented by requestHandler");
       os.close();
     });
   });
@@ -1295,25 +1267,15 @@ describe("ObjectStore", () => {
         },
       });
       os.close();
-      expect(() => os.exposeRemoteObject("test", {})).toThrow(
-        "Connection is already closed.",
-      );
-      await expect(() => os.requestRemoteObject("test")).rejects.toThrow(
-        "Connection is already closed.",
-      );
-      expect(() => os.getRemoteObject("test")).toThrow(
-        "Connection is already closed.",
-      );
-      await expect(() => os.requestHandler("")).rejects.toThrow(
-        "Connection is already closed.",
-      );
+      expect(() => os.exposeRemoteObject("test", {})).toThrow("Connection is already closed.");
+      await expect(() => os.requestRemoteObject("test")).rejects.toThrow("Connection is already closed.");
+      expect(() => os.getRemoteObject("test")).toThrow("Connection is already closed.");
+      await expect(() => os.requestHandler("")).rejects.toThrow("Connection is already closed.");
     });
     test("remote should close if local is closed", async () => {
       const [remote, local] = getObjectStorePair();
       local.close();
-      expect(() => remote.exposeRemoteObject("test", {})).toThrow(
-        "Connection is already closed.",
-      );
+      expect(() => remote.exposeRemoteObject("test", {})).toThrow("Connection is already closed.");
     });
   });
   describe("requestHandler", () => {
@@ -1323,18 +1285,12 @@ describe("ObjectStore", () => {
           return "";
         },
       });
-      await expect(os.requestHandler("test")).rejects.toThrow(
-        "request is not a message from Remote ObjectStore because it is not a object.",
-      );
-      await expect(os.requestHandler({})).rejects.toThrow(
-        "request is not a message from Remote ObjectStore because it has no type field.",
-      );
-      await expect(os.requestHandler({ type: "test" })).rejects.toThrow(
-        "request is not a message from Remote ObjectStore because it has a unknown value in the type field.",
-      );
+      await expect(os.requestHandler("test")).rejects.toThrow("request is not a message from Remote ObjectStore because it is not a object.");
+      await expect(os.requestHandler({})).rejects.toThrow("request is not a message from Remote ObjectStore because it has no type field.");
+      await expect(os.requestHandler({ type: "test" })).rejects.toThrow("request is not a message from Remote ObjectStore because it has a unknown value in the type field.");
       os.close();
     });
-    test("should error if remote Object is not in gcObjects", async () => {
+    test("should error if numbered remote Object is not in gcObjects", async () => {
       const local: ObjectStore = new ObjectStore({
         request(v) {
           (v as any).gcObjects = [];
@@ -1347,28 +1303,74 @@ describe("ObjectStore", () => {
         },
       });
       const api = {
-        log(_value: symbol) {
-        },
+        log(_value: symbol) {},
       };
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      await expect(async () => await a.log(Symbol())).rejects.toThrow(
-        "Remote Object with id 1 is unknown.",
-      );
+      await expect(async () => await a.log(Symbol())).rejects.toThrow("Remote Object with id 1 is unknown.");
+      local.close();
+      remote.close();
+    });
+    test("should error if named remote Object is not in gcObjects", async () => {
+      const local: ObjectStore = new ObjectStore({
+        request(v: any) {
+          if (v.type === "syncGcRequest") return remote.requestHandler(v);
+          v.gcObjects = [];
+          return remote.requestHandler(v);
+        },
+      });
+      const remote: ObjectStore = new ObjectStore({
+        request(v) {
+          return local.requestHandler(v);
+        },
+      });
+      const api = {
+        log(_value: any) {},
+      };
+      remote.exposeRemoteObject("test", api);
+      local.exposeRemoteObject("test", api);
+      const a = local.getRemoteObject<typeof api>("test");
+      await expect(async () => await a.log(api)).rejects.toThrow("Remote Object with id test is unknown.");
+      local.close();
+      remote.close();
+    });
+    test("should error if named remote Object is not in gcObjects", async () => {
+      let weakRef: Promise<WeakRef<{}>> = new Promise((resolve) => resolve(new WeakRef({})));
+      await doGc();
+      const local: ObjectStore = new ObjectStore({
+        request(v: any) {
+          if (v.type === "syncGcRequest") return remote.requestHandler(v);
+          v.gcObjects = [];
+          (remote as any).valueFromRemoteNumberIdPrivate.set(1, weakRef);
+          return remote.requestHandler(v);
+        },
+      });
+      const remote: ObjectStore = new ObjectStore({
+        request(v) {
+          return local.requestHandler(v);
+        },
+      });
+      const api = {
+        log(_value: any) {},
+      };
+      remote.exposeRemoteObject("test", api);
+      const a = local.getRemoteObject<typeof api>("test");
+      await expect(async () => await a.log({})).rejects.toThrow("Remote Object with id 1 is unknown.");
       local.close();
       remote.close();
     });
   });
   describe("syncGc", () => {
     test("option 'doNotSync' should cause error on syncGc", async () => {
-      const os = new ObjectStore({
-        async request() {
-          return "";
+      const os = new ObjectStore(
+        {
+          async request() {
+            return "";
+          },
         },
-      }, { doNotSyncGc: true });
-      expect(() => os.syncGc()).toThrow(
-        "Can not syncGc if option doNotSyncGc is true.",
+        { doNotSyncGc: true },
       );
+      expect(() => os.syncGc()).toThrow("Can not syncGc if option doNotSyncGc is true.");
       os.close();
     });
     test("calling multiple times while busy has no effect", async () => {
@@ -1379,9 +1381,9 @@ describe("ObjectStore", () => {
       os.syncGc();
       os.syncGc();
       expect(request).calledOnceWith({
-        "deletedItems": [],
-        "newItems": [],
-        "type": "syncGcRequest",
+        deletedItems: [],
+        newItems: [],
+        type: "syncGcRequest",
       });
       os.close();
     });
