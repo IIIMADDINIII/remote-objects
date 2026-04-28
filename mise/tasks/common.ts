@@ -1,2 +1,2 @@
-export * from "jsr:@iiimaddiniii/task-utils@0.0.3";
+export * from "jsr:@iiimaddiniii/task-utils@0.0.4";
 

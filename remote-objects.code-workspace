@@ -1,8 +1,12 @@
 {
-	"folders": [
-		{
-			"path": ".",
-		}
-	],
-	"settings": {}
+  "folders": [
+    {
+      "path": ".",
+    },
+  ],
+  "settings": {
+    "oxc.enable": true,
+    "oxc.enable.oxlint": true,
+    "oxc.enable.oxfmt": true,
+  },
 }

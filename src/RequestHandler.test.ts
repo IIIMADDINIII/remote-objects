@@ -1,8 +1,10 @@
 import { describe, expect, test, vi } from "vitest";
+
 import { RequestHandler } from "./RequestHandler.js";
 
 /**
  * Waits for the specified number of milliseconds.
+ *
  * @param ms The number of milliseconds to wait.
  * @returns A promise that resolves after the specified time.
  */
@@ -11,21 +13,27 @@ function wait(ms: number) {
 }
 
 function getRequestHandler(timeout?: number) {
-  const rh = new RequestHandler({
-    async sendMessage(data) {
-      setTimeout(() => rh.newMessageHandler(data), 0);
+  const rh = new RequestHandler(
+    {
+      async sendMessage(data) {
+        setTimeout(() => rh.newMessageHandler(data), 0);
+      },
     },
-  }, timeout);
-  rh.on("error", () => { });
+    timeout,
+  );
+  rh.on("error", () => {});
   return rh;
 }
 
 function getFaultyRequestHandlerPair() {
-  const master = new RequestHandler({
-    async sendMessage(data) {
-      setTimeout(() => faulty.newMessageHandler(data), 0);
+  const master = new RequestHandler(
+    {
+      async sendMessage(data) {
+        setTimeout(() => faulty.newMessageHandler(data), 0);
+      },
     },
-  }, 100);
+    100,
+  );
   const faulty = new RequestHandler({
     async sendMessage(_data) {
       throw new Error("test");
@@ -37,23 +45,25 @@ function getFaultyRequestHandlerPair() {
 describe("RequestHandler", () => {
   describe("constructor", () => {
     test("should call setDisconnectedHandler ", () => {
-      let dh = () => { };
+      let dh = () => {};
       const rh = new RequestHandler({
-        async sendMessage() { },
+        async sendMessage() {},
         setDisconnectedHandler(disconnected) {
           dh = disconnected;
         },
       });
+      // oxlint-disable-next-line typescript/unbound-method
       expect(rh.disconnectedHandler).toStrictEqual(dh);
     });
     test("should call setNewMessageHandler", () => {
-      let mh = (_a: any) => { };
+      let mh = (_a: any) => {};
       const rh = new RequestHandler({
-        async sendMessage() { },
+        async sendMessage() {},
         setNewMessageHandler(newMessage) {
           mh = newMessage;
         },
       });
+      // oxlint-disable-next-line typescript/unbound-method
       expect(rh.newMessageHandler).toStrictEqual(mh);
     });
   });
@@ -61,23 +71,17 @@ describe("RequestHandler", () => {
     test("should throw if already closed", async () => {
       const rh = getRequestHandler();
       rh.close();
-      await expect(rh.request({})).rejects.toThrow(
-        "Connection is already closed",
-      );
+      await expect(rh.request({})).rejects.toThrow("Connection is already closed");
     });
     test("should throw if no requestHandler is set", async () => {
       const rh = getRequestHandler();
-      await expect(rh.request({})).rejects.toThrow(
-        "Remote has no requestHandler set",
-      );
+      await expect(rh.request({})).rejects.toThrow("Remote has no requestHandler set");
     });
     test("should throw if no requestHandler is set and cant send message", async () => {
       const { master, faulty } = getFaultyRequestHandlerPair();
       const cb = vi.fn();
       faulty.addEventListener("error", cb);
-      await expect(master.request(0)).rejects.toThrow(
-        "Request Timeout reached",
-      );
+      await expect(master.request(0)).rejects.toThrow("Request Timeout reached");
       expect(() => {
         throw cb.mock.lastCall?.[0];
       }).toThrow("test");
@@ -111,9 +115,7 @@ describe("RequestHandler", () => {
       });
       const cb = vi.fn();
       faulty.on("error", cb);
-      await expect(master.request(0)).rejects.toThrow(
-        "Request Timeout reached",
-      );
+      await expect(master.request(0)).rejects.toThrow("Request Timeout reached");
       expect(() => {
         throw cb.mock.lastCall?.[0];
       }).toThrow("test");
@@ -125,9 +127,7 @@ describe("RequestHandler", () => {
       });
       const cb = vi.fn();
       faulty.on("error", cb);
-      await expect(master.request(0)).rejects.toThrow(
-        "Request Timeout reached",
-      );
+      await expect(master.request(0)).rejects.toThrow("Request Timeout reached");
       expect(() => {
         throw cb.mock.lastCall?.[0];
       }).toThrow("test");
@@ -155,15 +155,11 @@ describe("RequestHandler", () => {
   describe("newMessage", () => {
     test("throw if message is not an object", () => {
       const rh = getRequestHandler();
-      expect(() => rh.newMessageHandler("")).toThrow(
-        "data needs to contain a id [number] and a request, response or errorResponse",
-      );
+      expect(() => rh.newMessageHandler("")).toThrow("data needs to contain a id [number] and a request, response or errorResponse");
     });
     test("throw if message does not contain an id as number", () => {
       const rh = getRequestHandler();
-      expect(() => rh.newMessageHandler({ id: "" })).toThrow(
-        "data needs to contain a id [number] and a request, response or errorResponse",
-      );
+      expect(() => rh.newMessageHandler({ id: "" })).toThrow("data needs to contain a id [number] and a request, response or errorResponse");
     });
     test("throw if response id is unknown", () => {
       const rh = getRequestHandler();
@@ -199,7 +195,7 @@ describe("RequestHandler", () => {
     test("should call disconnectedHandler on Parent and MessageHandler", () => {
       const messageCallback = vi.fn();
       const rh = new RequestHandler({
-        async sendMessage() { },
+        async sendMessage() {},
         disconnectedHandler: messageCallback,
       });
       const callback = vi.fn();
@@ -215,7 +211,7 @@ describe("RequestHandler", () => {
     });
     test("Open Requests should be handled", async () => {
       const rh = new RequestHandler({
-        async sendMessage() { },
+        async sendMessage() {},
       });
       const request = rh.request("test");
       rh.close();
@@ -225,20 +221,21 @@ describe("RequestHandler", () => {
   describe("on", () => {
     test("can be called with some thing other than error", async () => {
       const rh = getRequestHandler();
-      rh.on("test", () => { });
+      rh.on("test", () => {});
     });
     test("if no error is registered, console.log happens", async () => {
       try {
         const errorSpy = vi.spyOn(console, "error");
-        const rh = new RequestHandler({
-          async sendMessage(data) {
-            setTimeout(() => rh.newMessageHandler(data), 0);
+        const rh = new RequestHandler(
+          {
+            async sendMessage(data) {
+              setTimeout(() => rh.newMessageHandler(data), 0);
+            },
           },
-        }, 100);
-        rh.newMessageHandler({ id: 0, errorResponse: "" });
-        expect(errorSpy).calledOnceWith(
-          new Error("Response with invalid id (maybe from timeout): 0"),
+          100,
         );
+        rh.newMessageHandler({ id: 0, errorResponse: "" });
+        expect(errorSpy).calledOnceWith(new Error("Response with invalid id (maybe from timeout): 0"));
       } finally {
         vi.restoreAllMocks();
       }
@@ -246,18 +243,19 @@ describe("RequestHandler", () => {
     test("if an error handler throws, it is logged", async () => {
       try {
         const errorSpy = vi.spyOn(console, "error");
-        const rh = new RequestHandler({
-          async sendMessage(data) {
-            setTimeout(() => rh.newMessageHandler(data), 0);
+        const rh = new RequestHandler(
+          {
+            async sendMessage(data) {
+              setTimeout(() => rh.newMessageHandler(data), 0);
+            },
           },
-        }, 100);
+          100,
+        );
         rh.on("error", () => {
           throw new Error("test");
         });
         rh.newMessageHandler({ id: 0, errorResponse: "" });
-        expect(errorSpy).calledOnceWith(
-          new Error("test"),
-        );
+        expect(errorSpy).calledOnceWith(new Error("test"));
       } finally {
         vi.restoreAllMocks();
       }
@@ -266,11 +264,12 @@ describe("RequestHandler", () => {
   describe("off", () => {
     test("calling off with something else than error has no effect", async () => {
       const rh = getRequestHandler();
-      rh.off("test", () => { });
+      rh.off("test", () => {});
     });
     test("removing an unknown listener has no effect", async () => {
       const rh = getRequestHandler();
-      rh.removeEventListener("error", () => { });
+      const unknownListener = () => {};
+      rh.removeEventListener("error", unknownListener);
     });
     test("listener can be removed again", async () => {
       const rh = getRequestHandler();
@@ -278,7 +277,7 @@ describe("RequestHandler", () => {
       rh.on("error", l);
       rh.off("error", l);
       rh.newMessageHandler({ id: 0, errorResponse: "" });
-      expect(l).not.called;
+      expect(l).toHaveBeenCalledTimes(0);
     });
   });
 });
