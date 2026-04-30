@@ -1,7 +1,7 @@
 import type { MessageHandlerInterface } from "./Interfaces.js";
+import type { ObjectStoreOptions } from "./ObjectStore.js";
 import { ObjectStore } from "./ObjectStore.js";
 import { RequestHandler } from "./RequestHandler.js";
-import type { ObjectStoreOptions } from "./types.js";
 
 /**
  * Options on how to create a ObjectsStore with the Default RequestHandler.
@@ -32,29 +32,8 @@ export function createObjectStore(options: CreateObjectStoreOptions): ObjectStor
 
 export { RequestError, RequestHandler, TimeoutError } from "./RequestHandler.js";
 
-export { isProxy, ObjectStore } from "./ObjectStore.js";
+export { isProxy, ObjectStore, type ObjectStoreOptions, type RemoteError, type RemoteObjectPrototype } from "./ObjectStore.js";
 
 export type { DisconnectedHandler, MessageHandlerInterface, NewMessageHandler, RequestHandlerFunction, RequestHandlerInterface, SendMessageFunction, Transferable } from "./Interfaces.js";
 
-export type {
-  Local,
-  LocalConstructor,
-  LocalFunction,
-  ObjectStoreOptions,
-  Primitives,
-  Remote,
-  RemoteConstructor,
-  RemoteConstructorPromise,
-  RemoteError,
-  RemoteFunction,
-  RemoteFunctionParameters,
-  RemoteFunctionPromise,
-  RemoteObj,
-  RemoteObject,
-  RemoteObjectAble,
-  RemoteObjectPrototype,
-  RemoteObjPromise,
-  RemotePrimitiveReadonly,
-  RemotePrimitiveSettable,
-  RemoteReturnType,
-} from "./types.js";
+export type * from "./remote.js";

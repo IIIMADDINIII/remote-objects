@@ -1,8 +1,8 @@
 import { describe, expect, test, vi } from "vitest";
 
 import type { RequestHandlerFunction } from "./Interfaces.js";
-import { isProxy, ObjectStore } from "./ObjectStore.js";
-import type { MayHaveSymbol, ObjectStoreOptions, Remote } from "./types.js";
+import { isProxy, ObjectStore, type MayHaveSymbol, type ObjectStoreOptions } from "./ObjectStore.js";
+import type { Remote } from "./remote.js";
 
 // Seclarations for the Garbage Collector Node api.
 declare global {

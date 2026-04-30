@@ -1,31 +1,19 @@
 import type { RequestHandlerInterface, Transferable } from "./Interfaces.js";
+import type { RemoteObject, RemoteObjectAble } from "./remote.js";
 import type {
   ErrorDescription,
-  ExtendableRemotePath,
-  ExtendingRemotePath,
   FunctionDescription,
   GcId,
-  GcIdDescription,
   GcObjectDescription,
-  GcObjectMap,
-  Key,
   KeyDescription,
   LocalGcId,
   LocalizedGcId,
-  MayHaveSymbol,
   NullDescription,
   ObjectDescription,
-  ObjectStoreOptions,
   OwnKeyDescription,
   RemoteDescription,
   RemoteGcId,
-  RemoteObject,
-  RemoteObjectAble,
-  RemotePath,
-  ResolvedFunctionDescription,
-  ResolvedObjectDescription,
   ResponseValueDescription,
-  RootPathSegment,
   SymbolDescription,
   SyncGcRequest,
   SyncGcResponse,
@@ -34,7 +22,185 @@ import type {
   ValueRequestDescription,
   ValueResponseDescription,
   ValueSegment,
-} from "./types.js";
+} from "./transport.js";
+
+// ┌─┐┌─┐┌┐┌┌─┐┌┬┐┬─┐┬ ┬┌─┐┌┬┐┌─┐┬─┐  ┌─┐┌─┐┌┬┐┬┌─┐┌┐┌┌─┐
+// │  │ ││││└─┐ │ ├┬┘│ ││   │ │ │├┬┘  │ │├─┘ │ ││ ││││└─┐
+// └─┘└─┘┘└┘└─┘ ┴ ┴└─└─┘└─┘ ┴ └─┘┴└─  └─┘┴   ┴ ┴└─┘┘└┘└─┘
+
+/**
+ * How to represent the prototype of RemoteObjects.
+ * - "full":
+ * Represent the prototype with an other RemoteObject so instanceof and getPrototypeOf will work.
+ * - "keysOnly":
+ * Lists all the keys in the prototype chain so "key" in RemoteObject will work but the getPrototypeOf will return null (instanceof does not work).
+ * - "none":
+ * The prototype of RemoteObjects is always null amd only ownKeys are represented.
+ *
+ * @default "full"
+ * @public
+ */
+export type RemoteObjectPrototype = "none" | "keysOnly" | "full";
+
+/**
+ * Defines how Errors should be represented on the Remote.
+ * It only applies if the Thrown value was an instance of Error and if it was part of the Rejected error.
+ * - "newError":
+ * Creates a new Error including the message, stack and name of the original error.
+ * If you define more fields on the error directly, they are not present on the Remote Error.
+ * Instead use the field cause which has the RemoteObject of the original error.
+ * Instanceof should work as well, when the remote class is used (local Error class !== remote Error class).
+ * - "remoteObject":
+ * Directly throws with the RemoteObject. Await needs to be used to access message and other properties. Dosen't capture local stacktrace.
+ *
+ * @default "newError"
+ * @public
+ */
+export type RemoteError = "remoteObject" | "newError";
+
+/**
+ * Options for creating a remote Object Store.
+ *
+ * @public
+ */
+export interface ObjectStoreOptions {
+  /**
+   * How to represent the prototype of RemoteObjects.
+   * - "full":
+   * Represent the prototype with an other RemoteObject so instanceof and getPrototypeOf will work.
+   * - "keysOnly":
+   * Lists all the keys in the prototype chain so "key" in RemoteObject will work but the getPrototypeOf will return null (instanceof does not work).
+   * - "none":
+   * The prototype of RemoteObjects is always null amd only ownKeys are represented.
+   *
+   * @default "full"
+   */
+  remoteObjectPrototype?: RemoteObjectPrototype;
+  /**
+   * Defines how Errors should be represented on the Remote.
+   * It only applies if the Thrown value was an instance of Error and if it was part of the Rejected error.
+   * - "newError":
+   * Creates a new Error including the message, stack and name of the original error.
+   * If you define more fields on the error directly, they are not present on the Remote Error.
+   * Instead use the field cause which has the RemoteObject of the original error.
+   * Instanceof should work as well, when the remote class is used (local Error class !== remote Error class).
+   * - "remoteObject":
+   * Directly throws with the RemoteObject. Await needs to be used to access message and other properties. Dosen't capture local stacktrace.
+   *
+   * @default "newError"
+   */
+  remoteError?: RemoteError;
+  /**
+   * Defines that the toString handler should not be implemented by RemoteObjects.
+   * - true:
+   * Will have no special logic for toString, [Symbol.toStringTag] and [Symbol.toPrimitive] Property.
+   * It will return a Promise for these Properties.
+   * - false:
+   * Will return "RemoteObject" for [Symbol.toStringTag].
+   * ToString Property will return Object.prototype.toString.
+   * [Symbol.toPrimitive] will return undefined.
+   * Will not return a Promise for these Properties.
+   *
+   * @default false
+   */
+  noToString?: boolean;
+  /**
+   * Defines that no gc Synchronisation should happen.
+   * - true:
+   * All Objects shared with remote are never released (memory leak).
+   * Calling syncGc will throw an Error.
+   * SyncGc will never be scheduled.
+   * - false:
+   * syncGc will be automatically called based on scheduleGcAfterTime and scheduleGcAfterObjectCount.
+   * Also calling syncGc manually is an option.
+   * Objects Shared with remote will eventually get garbage collected.
+   *
+   * @default false
+   */
+  doNotSyncGc?: boolean;
+  /**
+   * Amount of time in milliseconds after syncGc is automatically scheduled again.
+   * Value of 0 means never.
+   *
+   * @default 30000
+   */
+  scheduleGcAfterTime?: number;
+  /**
+   * Number of Garbage Collected Objects after a syncGc should be scheduled.
+   * Value of 0 means never.
+   *
+   * @default 200
+   */
+  scheduleGcAfterObjectCount?: number;
+  /**
+   * Amount of expected network latency in milliseconds.
+   * This is needed to fix GarbageCollection is a request was lost or faulty.
+   * This does not include processing time of the Request itself.
+   * It is the maximum amount of time to send and receive a message from remote.
+   * If a Message exceeds this Time the corresponding objects might get Garbage Collected even if there are used by remote.
+   * Plan a healthy amount of reserve.
+   * If many Objects a created, this delays when they are checked.
+   *
+   * @default 5000
+   */
+  requestLatency?: number;
+}
+
+// ┬┌┐┌┌┬┐┌─┐┬─┐┌┐┌┌─┐┬    ┌┬┐┬ ┬┌─┐┌─┐┌─┐
+// ││││ │ ├┤ ├┬┘│││├─┤│     │ └┬┘├─┘├┤ └─┐
+// ┴┘└┘ ┴ └─┘┴└─┘└┘┴ ┴┴─┘   ┴  ┴ ┴  └─┘└─┘
+
+/** Metadata of an local Gc Item. */
+type GcIdDescription = {
+  /** Id ig the local gc item. */
+  id: GcId;
+  /** Last Time the local item was sent to remote. */
+  time: number;
+  /** The local Item. */
+  value: symbol | {};
+};
+
+/** Map from GcId to the Object description with that id. */
+type GcObjectMap = Map<GcId, GcObjectDescription>;
+
+/** All Possible types for an object Key (string or symbol). */
+type Key = string | symbol;
+
+/** Type for caching the evaluated Function Description. */
+type ResolvedFunctionDescription = {
+  /** Map of all the Own Keys with its parameters. */
+  ownKeys: Map<Key, { configurable: true; enumerable: boolean }>;
+  /** List of all the Keys wich exist on the function (empty list if Prototype is not Null). */
+  hasKeys: Key[];
+  /** Prototype of the function. Null when it does not exist. */
+  prototype: {} | null;
+  /** Prototype property of the function. */
+  functionPrototype: unknown;
+};
+
+/** Type for caching the evaluated Object Description. */
+type ResolvedObjectDescription = {
+  /** Map of all the Own Keys with its parameters. */
+  ownKeys: Map<Key, { configurable: true; enumerable: boolean }>;
+  /** List of all the Keys wich exist on the object (empty list if Prototype is not Null). */
+  hasKeys: Key[];
+  /** Prototype of the Object. Null when it does not exist. */
+  prototype: {} | null;
+};
+
+/** Object which may have a Symbol. */
+export type MayHaveSymbol<T> = {
+  /** Index signature to show that an Object may have a Symbol as a Key. */
+  [key: symbol]: T | undefined;
+};
+
+// ##     ##    ###    #### ##    ##     ######  ##          ###     ######   ######
+// ###   ###   ## ##    ##  ###   ##    ##    ## ##         ## ##   ##    ## ##    ##
+// #### ####  ##   ##   ##  ####  ##    ##       ##        ##   ##  ##       ##
+// ## ### ## ##     ##  ##  ## ## ##    ##       ##       ##     ##  ######   ######
+// ##     ## #########  ##  ##  ####    ##       ##       #########       ##       ##
+// ##     ## ##     ##  ##  ##   ###    ##    ## ##       ##     ## ##    ## ##    ##
+// ##     ## ##     ## #### ##    ##     ######  ######## ##     ##  ######   ######
 
 /**
  * Class to handle object Caching and Translation of ObjectDescriptions to RemoteObjects.
@@ -1292,3 +1458,74 @@ const UnsupportedHandlers: ProxyHandler<{}> = {
     return false;
   },
 };
+
+// ┬┌┐┌┌┬┐┌─┐┬─┐┌┐┌┌─┐┬    ┌┬┐┌─┐┌┬┐┌─┐┌─┐┬─┐┌─┐┬─┐┬ ┬  ┬─┐┌─┐┌─┐┬─┐┌─┐┌─┐┌─┐┌┐┌┌┬┐┌─┐┌┬┐┬┌─┐┌┐┌  ┌─┐┌─┐  ┌─┐  ┬─┐┌─┐┌┬┐┌─┐┌┬┐┌─┐┌─┐┌─┐┌┬┐┬ ┬
+// ││││ │ ├┤ ├┬┘│││├─┤│     │ ├┤ │││├─┘│ │├┬┘├─┤├┬┘└┬┘  ├┬┘├┤ ├─┘├┬┘├┤ └─┐├┤ │││ │ ├─┤ │ ││ ││││  │ │├┤   ├─┤  ├┬┘├┤ ││││ │ │ ├┤ ├─┘├─┤ │ ├─┤
+// ┴┘└┘ ┴ └─┘┴└─┘└┘┴ ┴┴─┘   ┴ └─┘┴ ┴┴  └─┘┴└─┴ ┴┴└─ ┴   ┴└─└─┘┴  ┴└─└─┘└─┘└─┘┘└┘ ┴ ┴ ┴ ┴ ┴└─┘┘└┘  └─┘└    ┴ ┴  ┴└─└─┘┴ ┴└─┘ ┴ └─┘┴  ┴ ┴ ┴ ┴ ┴
+
+/** The Root of all RemotePaths. The top most Parent always needs to be a RootPathSegment. */
+type RootPathSegment = {
+  /** Type of the Segment. */
+  type: "root";
+  /** Remote Id of the Remote Object. */
+  id: GcId;
+  /** Description of the Remote Object, to support stuff like hasKey. */
+  description?: ResolvedObjectDescription | ResolvedFunctionDescription;
+};
+
+/** Path segment representing reading of an property. */
+type GetPathSegment = {
+  /** Type of the Segment. */
+  type: "get";
+  /** Name of the property to read. */
+  name: Key;
+  /** Parent Segment representing an object. */
+  parent: ExtendableRemotePath;
+};
+
+/** Path segment representing the Assignment of an property. */
+type SetPathSegment = {
+  /** Type of the Segment. */
+  type: "set";
+  /** Name of the Property to set. */
+  name: Key;
+  /** Value to assign to the property. */
+  value: unknown;
+  /** Parent Segment representing an object. */
+  parent: ExtendableRemotePath;
+};
+
+/** Path segment representing the call of an function. */
+type CallPathSegment = {
+  /** Type of the Segment. */
+  type: "call";
+  /** List of all the Arguments to this function call. */
+  args: unknown[];
+  /**
+   * Parent Segment wich is getting called.
+   * Probably value referencing a function.
+   */
+  parent: ExtendableRemotePath;
+};
+
+/** Path segment representing the creation of an object. */
+type NewPathSegment = {
+  /** Type of the Segment. */
+  type: "new";
+  /** List of Arguments to the constructor. */
+  args: unknown[];
+  /**
+   * Parent Segment wich is getting called.
+   * Probably value referencing a constructor.
+   */
+  parent: ExtendableRemotePath;
+};
+
+/** All Path Segments which can be extended (Can be the Parent of an ExtendingRemotePath; currently everything except SetPathSegment). */
+type ExtendableRemotePath = RootPathSegment | GetPathSegment | NewPathSegment | CallPathSegment;
+
+/** All Path Segments which are based on a Parent segment (Every Segment type except RootPathSegment). */
+type ExtendingRemotePath = GetPathSegment | NewPathSegment | CallPathSegment | SetPathSegment;
+
+/** Description of a remote Path (Object + some operations). */
+type RemotePath = ExtendableRemotePath | SetPathSegment;
