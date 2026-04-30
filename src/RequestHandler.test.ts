@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vite-plus/test";
 
 import { RequestHandler } from "./RequestHandler.js";
 
@@ -6,7 +6,8 @@ import { RequestHandler } from "./RequestHandler.js";
  * Waits for the specified number of milliseconds.
  *
  * @param ms The number of milliseconds to wait.
- * @returns A promise that resolves after the specified time.
+ * @returns A promise that resolves after the specified
+ * time.
  */
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));

@@ -1,9 +1,7 @@
-catalogMode: prefer
-
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@0.1.23
-  vitest: npm:@voidzero-dev/vite-plus-test@0.1.23
-  vite-plus: 0.1.23
+  vite: npm:@voidzero-dev/vite-plus-core@0.2.1
+  vitest: 4.1.9
+  vite-plus: 0.2.1
 overrides:
   vite: "catalog:"
   vitest: "catalog:"
@@ -14,3 +12,5 @@ peerDependencyRules:
   allowedVersions:
     vite: "*"
     vitest: "*"
+minimumReleaseAgeExclude:
+  - rolldown-plugin-access-privates@0.1.4

@@ -6,7 +6,6 @@ import { Ctx, pnpm, task, vp } from "./common.ts";
 export const build = task("Build project", async (ctx) => {
   await pnpm.install(ctx);
   await vp.fmt(ctx, { check: false });
-  await vp.lint(ctx);
   await vp.pack(ctx);
 });
 

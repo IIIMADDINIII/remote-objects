@@ -21,7 +21,10 @@ type ErrorResponseMessage = {
 /** All possible Message types. */
 type Message = RequestMessage | ResponseMessage | ErrorResponseMessage;
 
-/** Datatype to store the callbacks wich need to be called when the Response is Processed. */
+/**
+ * Datatype to store the callbacks wich need to be called
+ * when the Response is Processed.
+ */
 type ResolveRequest = {
   success: (data: Transferable) => void;
   error: (error: unknown) => void;
@@ -47,14 +50,16 @@ function isMessage(data: Transferable): data is Message {
 export class TimeoutError extends Error {}
 
 /**
- * Error Class which is used if the remote requestHandler thew an Error.
+ * Error Class which is used if the remote requestHandler
+ * thew an Error.
  *
  * @public
  */
 export class RequestError extends Error {}
 
 /**
- * A Implementation of an Request Handler to use with message channels like postMessage or Websockets.
+ * A Implementation of an Request Handler to use with
+ * message channels like postMessage or Websockets.
  *
  * @public
  */
@@ -69,10 +74,14 @@ export class RequestHandler implements RequestHandlerInterface {
   #errorListeners: ((e: unknown) => void)[] = [];
 
   /**
-   * Creates a new RequestHandler to be used with the ObjectStore.
+   * Creates a new RequestHandler to be used with the
+   * ObjectStore.
    *
-   * @param messageHandler - Interface describing a Message channel (like postMessage or Websockets).
-   * @param timeout - Time in milliseconds after which a request is canceled with an TimeoutError (default = 10000).
+   * @param messageHandler - Interface describing a Message
+   *   channel (like postMessage or Websockets).
+   * @param timeout - Time in milliseconds after which a
+   *   request is canceled with an TimeoutError (default =
+   *   10000).
    */
   constructor(messageHandler: MessageHandlerInterface, timeout: number = 10000) {
     this.#messageHandler = messageHandler;
@@ -90,12 +99,16 @@ export class RequestHandler implements RequestHandlerInterface {
   }
 
   /**
-   * This function should be invoked for every request to the Remote.
-   * As a result the requestHandler function on the Remote RequestHandler is invoked with this request Value.
-   * The return value of the requestHandler is returned by this function asynchronously.
+   * This function should be invoked for every request to
+   * the Remote. As a result the requestHandler function on
+   * the Remote RequestHandler is invoked with this request
+   * Value. The return value of the requestHandler is
+   * returned by this function asynchronously.
    *
-   * @param request - The request information to send to Remote (JSON Compatible).
-   * @returns A Promise containing the response of the Request (JSON Compatible).
+   * @param request - The request information to send to
+   *   Remote (JSON Compatible).
+   * @returns A Promise containing the response of the
+   * Request (JSON Compatible).
    */
   async request(request: Transferable): Promise<Transferable> {
     this.#checkClosed();
@@ -128,7 +141,8 @@ export class RequestHandler implements RequestHandlerInterface {
   }
 
   /**
-   * This function should be called for every Message received from remote.
+   * This function should be called for every Message
+   * received from remote.
    *
    * @param data - The data wich was received from remote.
    */
@@ -141,16 +155,18 @@ export class RequestHandler implements RequestHandlerInterface {
   }
 
   /**
-   * This function should be called if the connection to the remote is lost (for cleanup).
-   * Also this will be called, if the ObjectStore.close is called.
+   * This function should be called if the connection to the
+   * remote is lost (for cleanup). Also this will be called,
+   * if the ObjectStore.close is called.
    */
   disconnectedHandler(): void {
     this.close();
   }
 
   /**
-   * Call this to Close the Connection.
-   * Also Calls to the disconnectHandler on the ObjectStore and MessageHandler.
+   * Call this to Close the Connection. Also Calls to the
+   * disconnectHandler on the ObjectStore and
+   * MessageHandler.
    */
   close(): void {
     if (this.#closed) return;
@@ -166,18 +182,25 @@ export class RequestHandler implements RequestHandlerInterface {
   }
 
   /**
-   * The ObjectStore will call this function with the requestHandler function in its constructor if it is defined.
+   * The ObjectStore will call this function with the
+   * requestHandler function in its constructor if it is
+   * defined.
    *
-   * @param requestHandler - The requestHandler function which should be called for every incoming request.
+   * @param requestHandler - The requestHandler function
+   *   which should be called for every incoming request.
    */
   setRequestHandler(requestHandler: RequestHandlerFunction): void {
     this.#requestHandler = requestHandler;
   }
 
   /**
-   * The ObjectStore will call this function with the disconnectedHandler function in its constructor if it is defined.
+   * The ObjectStore will call this function with the
+   * disconnectedHandler function in its constructor if it
+   * is defined.
    *
-   * @param disconnectedHandler - The disconnectedHandler function wich should be called if the connection to the remote is lost (for cleanup).
+   * @param disconnectedHandler - The disconnectedHandler
+   *   function wich should be called if the connection to
+   *   the remote is lost (for cleanup).
    */
   setDisconnectedHandler(disconnectedHandler: DisconnectedHandler): void {
     this.#disconnectedHandler = disconnectedHandler;
@@ -234,9 +257,11 @@ export class RequestHandler implements RequestHandlerInterface {
   }
 
   /**
-   * Generates a new number as Request ID to link the Response Message to the Request.
+   * Generates a new number as Request ID to link the
+   * Response Message to the Request.
    *
-   * @returns A number wich is not used by any pending requests.
+   * @returns A number wich is not used by any pending
+   * requests.
    */
   #nextRequestId(): number {
     while (true) {
@@ -256,15 +281,17 @@ export class RequestHandler implements RequestHandlerInterface {
   }
 
   /**
-   * Send a message via the this.#messageHanders.sendMessage.
-   * Converts a maybe Promise in to a Promise.
+   * Send a message via the
+   * this.#messageHanders.sendMessage. Converts a maybe
+   * Promise in to a Promise.
    */
   async #sendMessage(data: Transferable): Promise<void> {
     return await this.#messageHandler.sendMessage(data);
   }
 
   /**
-   * Call all error Handlers, if none exist print to console.
+   * Call all error Handlers, if none exist print to
+   * console.
    *
    * @param e - The error to emit.
    */
@@ -282,7 +309,8 @@ export class RequestHandler implements RequestHandlerInterface {
   /**
    * Add an Error Event Listener.
    *
-   * @param eventName - Only "error" is supported. All other event names are ignored.
+   * @param eventName - Only "error" is supported. All other
+   *   event names are ignored.
    * @param listener - Function to call if an error happens.
    * @returns This
    */
@@ -297,7 +325,8 @@ export class RequestHandler implements RequestHandlerInterface {
   /**
    * Add an Error Event Listener.
    *
-   * @param eventName - Only "error" is supported. All other event names are ignored.
+   * @param eventName - Only "error" is supported. All other
+   *   event names are ignored.
    * @param listener - Function to call if an error happens.
    */
   addEventListener(eventName: "error", listener: (e: unknown) => void): void;
@@ -309,7 +338,8 @@ export class RequestHandler implements RequestHandlerInterface {
   /**
    * Remove a Error Listener again.
    *
-   * @param eventName - Only "error" is supported. All other event names are ignored.
+   * @param eventName - Only "error" is supported. All other
+   *   event names are ignored.
    * @param listener - Handler which was registered with on.
    * @returns This
    */
@@ -325,8 +355,10 @@ export class RequestHandler implements RequestHandlerInterface {
   /**
    * Remove a Error Listener again.
    *
-   * @param eventName - Only "error" is supported. All other event names are ignored.
-   * @param listener - Handler which was registered with addEventListener.
+   * @param eventName - Only "error" is supported. All other
+   *   event names are ignored.
+   * @param listener - Handler which was registered with
+   *   addEventListener.
    */
   removeEventListener(eventName: "error", listener: (e: unknown) => void): void;
   removeEventListener(eventName: string, listener: (e: unknown) => void): void;

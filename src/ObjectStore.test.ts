@@ -1,8 +1,8 @@
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vite-plus/test";
 
 import type { RequestHandlerFunction } from "./Interfaces.js";
-import { isProxy, ObjectStore } from "./ObjectStore.js";
-import type { MayHaveSymbol, ObjectStoreOptions, Remote } from "./types.js";
+import { isProxy, ObjectStore, type MayHaveSymbol, type ObjectStoreOptions } from "./ObjectStore.js";
+import { SET, type Remote, type RemoteAwaited } from "./remote.js";
 
 // Seclarations for the Garbage Collector Node api.
 declare global {
@@ -15,7 +15,8 @@ declare global {
  * Waits for the specified number of milliseconds.
  *
  * @param ms The number of milliseconds to wait.
- * @returns A promise that resolves after the specified time.
+ * @returns A promise that resolves after the specified
+ * time.
  */
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -296,6 +297,7 @@ describe("ObjectStore", () => {
       const [remote, local] = getObjectStorePair();
       remote.exposeRemoteObject("test", api);
       const a = await local.requestRemoteObject<typeof api>("test");
+      // @ts-expect-error
       expect(() => delete a.a).toThrow("'deleteProperty' on proxy: trap returned falsish for property 'a'");
       local.close();
     });
@@ -410,7 +412,10 @@ describe("ObjectStore", () => {
     test("providing a proxied object should resolve in to the Object on remote", async () => {
       const [remote, local] = getObjectStorePair();
       const fn = vi.fn();
-      const api = { fn: fn as (o: object) => void, object: { value: 10 } };
+      const api = {
+        fn: fn as (o: object) => void,
+        object: { value: 10 },
+      };
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
       await a.fn(a.object);
@@ -424,7 +429,7 @@ describe("ObjectStore", () => {
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
       expect(api.number).not.toEqual(11);
-      await a.number.set(11);
+      await a.number[SET](11);
       expect(api.number).toEqual(11);
       local.close();
     });
@@ -487,7 +492,7 @@ describe("ObjectStore", () => {
       expect("c" in i).toEqual(false);
       expect(await i.a).toEqual(10);
       expect(await i.b()).toEqual("10");
-      await i.a.set(11);
+      await i.a[SET](11);
       expect(await i.a).not.toEqual(10);
       expect(await i.b()).not.toEqual("10");
       expect(await i.a).toEqual(11);
@@ -499,8 +504,10 @@ describe("ObjectStore", () => {
       const [remote, local] = getObjectStorePair();
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      await expect(async () => (a as any).set()).rejects.toThrow("Cannot write to a RemoteObject or Return Value. Only properties can be set.");
-      await expect(async () => new (a as any)().set()).rejects.toThrow("Cannot write to a RemoteObject or Return Value. Only properties can be set.");
+      await expect(async () => (a as any)[SET]()).rejects.toThrow("Cannot write to a RemoteObject or Return Value. Only properties can be set.");
+      await expect(async () => new (a as any)()[SET]()).rejects.toThrow(
+        "Cannot write to a RemoteObject or Return Value. Only properties can be set.",
+      );
       local.close();
     });
     test("if error has no Stacktrace only remote stack should be Returned", async () => {
@@ -647,7 +654,10 @@ describe("ObjectStore", () => {
     });
     test("should be able to get a symbol field from remote", async () => {
       const symbol = Symbol();
-      const api: { [symbol]: number; symbol: typeof symbol } = {
+      const api: {
+        [symbol]: number;
+        symbol: typeof symbol;
+      } = {
         [symbol]: 10,
         symbol,
       };
@@ -664,7 +674,7 @@ describe("ObjectStore", () => {
       const [remote, local] = getObjectStorePair();
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      await a[symbol]?.set(11);
+      await a[symbol]?.[SET](11);
       expect(await a[symbol]).toEqual(11);
       local.close();
     });
@@ -726,7 +736,7 @@ describe("ObjectStore", () => {
       });
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      let o: Remote<Test1234> | undefined = await a.test();
+      let o: RemoteAwaited<Test1234> | undefined = await a.test();
       await doGc();
       expect(weakRef?.deref()).not.toEqual(undefined);
       use(o);
@@ -822,7 +832,7 @@ describe("ObjectStore", () => {
       });
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      let o: Remote<Test1234> | undefined = await a.test();
+      let o: RemoteAwaited<Test1234> | undefined = await a.test();
       await doGc();
       expect(weakRef?.deref()).not.toEqual(undefined);
       use(o);
@@ -967,7 +977,7 @@ describe("ObjectStore", () => {
       );
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      let b: Remote<Test1234> | undefined = await a.test();
+      let b: RemoteAwaited<Test1234> | undefined = await a.test();
       expect(weakRef?.deref()).not.toEqual(undefined);
       await doGc();
       expect(weakRef?.deref()).toEqual(undefined);
@@ -1008,7 +1018,7 @@ describe("ObjectStore", () => {
       );
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      let b: Remote<Test1234> = await a.test();
+      let b = await a.test();
       expect(weakRef?.deref()).not.toEqual(undefined);
       await doGc();
       expect(weakRef?.deref()).toEqual(undefined);
@@ -1147,7 +1157,9 @@ describe("ObjectStore", () => {
       const [remote, local] = getObjectStorePair();
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      expect(() => Object.getPrototypeOf(a)).toThrow("getPrototypeOf is not Supported by RemoteObject Proxy. Await the RemoteObject to be able to query metadata.");
+      expect(() => Object.getPrototypeOf(a)).toThrow(
+        "getPrototypeOf is not Supported by RemoteObject Proxy. Await the RemoteObject to be able to query metadata.",
+      );
       local.close();
     });
     test("has should fail", async () => {
@@ -1163,7 +1175,9 @@ describe("ObjectStore", () => {
       const [remote, local] = getObjectStorePair();
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      expect(() => Object.getOwnPropertyNames(a)).toThrow("ownKeys is not Supported by RemoteObject Proxy. Await the RemoteObject to be able to query metadata.");
+      expect(() => Object.getOwnPropertyNames(a)).toThrow(
+        "ownKeys is not Supported by RemoteObject Proxy. Await the RemoteObject to be able to query metadata.",
+      );
       local.close();
     });
     test("getOwnPropertyDescriptor should fail", async () => {
@@ -1171,7 +1185,9 @@ describe("ObjectStore", () => {
       const [remote, local] = getObjectStorePair();
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      expect(() => Object.getOwnPropertyDescriptor(a, "a")).toThrow("getOwnPropertyDescriptor is not Supported by RemoteObject Proxy. Await the RemoteObject to be able to query metadata.");
+      expect(() => Object.getOwnPropertyDescriptor(a, "a")).toThrow(
+        "getOwnPropertyDescriptor is not Supported by RemoteObject Proxy. Await the RemoteObject to be able to query metadata.",
+      );
       local.close();
     });
     test("defineProperty should fail", async () => {
@@ -1187,6 +1203,7 @@ describe("ObjectStore", () => {
       const [remote, local] = getObjectStorePair();
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
+      // @ts-expect-error
       expect(() => delete a.a).toThrow("'deleteProperty' on proxy: trap returned falsish for property 'a'");
       local.close();
     });
@@ -1287,7 +1304,9 @@ describe("ObjectStore", () => {
       });
       await expect(os.requestHandler("test")).rejects.toThrow("request is not a message from Remote ObjectStore because it is not a object.");
       await expect(os.requestHandler({})).rejects.toThrow("request is not a message from Remote ObjectStore because it has no type field.");
-      await expect(os.requestHandler({ type: "test" })).rejects.toThrow("request is not a message from Remote ObjectStore because it has a unknown value in the type field.");
+      await expect(os.requestHandler({ type: "test" })).rejects.toThrow(
+        "request is not a message from Remote ObjectStore because it has a unknown value in the type field.",
+      );
       os.close();
     });
     test("should error if numbered remote Object is not in gcObjects", async () => {
@@ -1341,7 +1360,11 @@ describe("ObjectStore", () => {
         request(v: any) {
           if (v.type === "syncGcRequest") return remote.requestHandler(v);
           v.gcObjects = [];
-          (remote as any).valueFromRemoteNumberIdPrivate.set(1, weakRef);
+          (
+            remote as ObjectStore & {
+              valueFromRemoteNumberIdPrivate: Map<number, Promise<WeakRef<{}>>>;
+            }
+          ).valueFromRemoteNumberIdPrivate.set(1, weakRef);
           return remote.requestHandler(v);
         },
       });

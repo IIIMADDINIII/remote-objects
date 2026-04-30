@@ -33,7 +33,7 @@ export default defineConfig(({ mode }) => ({
   fmt: {
     ignorePatterns: ["/mise/"],
     sortImports: true,
-    printWidth: 300,
+    printWidth: 150,
     jsdoc: {
       descriptionWithDot: true,
       lineWrappingStyle: "balance",

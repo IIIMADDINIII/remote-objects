@@ -1,31 +1,19 @@
 import type { RequestHandlerInterface, Transferable } from "./Interfaces.js";
+import { REMOTE_MARKER, SET, type RemoteAble, type RemoteMarker, type RemoteReadonly } from "./remote.js";
 import type {
   ErrorDescription,
-  ExtendableRemotePath,
-  ExtendingRemotePath,
   FunctionDescription,
   GcId,
-  GcIdDescription,
   GcObjectDescription,
-  GcObjectMap,
-  Key,
   KeyDescription,
   LocalGcId,
   LocalizedGcId,
-  MayHaveSymbol,
   NullDescription,
   ObjectDescription,
-  ObjectStoreOptions,
   OwnKeyDescription,
   RemoteDescription,
   RemoteGcId,
-  RemoteObject,
-  RemoteObjectAble,
-  RemotePath,
-  ResolvedFunctionDescription,
-  ResolvedObjectDescription,
   ResponseValueDescription,
-  RootPathSegment,
   SymbolDescription,
   SyncGcRequest,
   SyncGcResponse,
@@ -34,12 +22,203 @@ import type {
   ValueRequestDescription,
   ValueResponseDescription,
   ValueSegment,
-} from "./types.js";
+} from "./transport.js";
+
+// ┌─┐┌─┐┌┐┌┌─┐┌┬┐┬─┐┬ ┬┌─┐┌┬┐┌─┐┬─┐  ┌─┐┌─┐┌┬┐┬┌─┐┌┐┌┌─┐
+// │  │ ││││└─┐ │ ├┬┘│ ││   │ │ │├┬┘  │ │├─┘ │ ││ ││││└─┐
+// └─┘└─┘┘└┘└─┘ ┴ ┴└─└─┘└─┘ ┴ └─┘┴└─  └─┘┴   ┴ ┴└─┘┘└┘└─┘
 
 /**
- * Class to handle object Caching and Translation of ObjectDescriptions to RemoteObjects.
+ * How to represent the prototype of RemoteObjects. -
+ * "full": Represent the prototype with an other
+ * RemoteObject so instanceof and getPrototypeOf will work.
+ * - "keysOnly": Lists all the keys in the prototype chain
+ * so "key" in RemoteObject will work but the getPrototypeOf
+ * will return null (instanceof does not work). - "none":
+ * The prototype of RemoteObjects is always null amd only
+ * ownKeys are represented.
  *
- * @public
+ * @default "full"
+ */
+export type RemoteObjectPrototype = "none" | "keysOnly" | "full";
+
+/**
+ * Defines how Errors should be represented on the Remote.
+ * It only applies if the Thrown value was an instance of
+ * Error and if it was part of the Rejected error. -
+ * "newError": Creates a new Error including the message,
+ * stack and name of the original error. If you define more
+ * fields on the error directly, they are not present on the
+ * Remote Error. Instead use the field cause which has the
+ * RemoteObject of the original error. Instanceof should
+ * work as well, when the remote class is used (local Error
+ * class !== remote Error class). - "remoteObject": Directly
+ * throws with the RemoteObject. Await needs to be used to
+ * access message and other properties. Dosen't capture
+ * local stacktrace.
+ *
+ * @default "newError"
+ */
+export type RemoteError = "remoteObject" | "newError";
+
+/** Options for creating a remote Object Store. */
+export interface ObjectStoreOptions {
+  /**
+   * How to represent the prototype of RemoteObjects. -
+   * "full": Represent the prototype with an other
+   * RemoteObject so instanceof and getPrototypeOf will
+   * work. - "keysOnly": Lists all the keys in the prototype
+   * chain so "key" in RemoteObject will work but the
+   * getPrototypeOf will return null (instanceof does not
+   * work). - "none": The prototype of RemoteObjects is
+   * always null amd only ownKeys are represented.
+   *
+   * @default "full"
+   */
+  remoteObjectPrototype?: RemoteObjectPrototype;
+  /**
+   * Defines how Errors should be represented on the Remote.
+   * It only applies if the Thrown value was an instance of
+   * Error and if it was part of the Rejected error. -
+   * "newError": Creates a new Error including the message,
+   * stack and name of the original error. If you define
+   * more fields on the error directly, they are not present
+   * on the Remote Error. Instead use the field cause which
+   * has the RemoteObject of the original error. Instanceof
+   * should work as well, when the remote class is used
+   * (local Error class !== remote Error class). -
+   * "remoteObject": Directly throws with the RemoteObject.
+   * Await needs to be used to access message and other
+   * properties. Dosen't capture local stacktrace.
+   *
+   * @default "newError"
+   */
+  remoteError?: RemoteError;
+  /**
+   * Defines that the toString handler should not be
+   * implemented by RemoteObjects. - true: Will have no
+   * special logic for toString, [Symbol.toStringTag] and
+   * [Symbol.toPrimitive] Property. It will return a Promise
+   * for these Properties. - false: Will return
+   * "RemoteObject" for [Symbol.toStringTag]. ToString
+   * Property will return Object.prototype.toString.
+   * [Symbol.toPrimitive] will return undefined. Will not
+   * return a Promise for these Properties.
+   *
+   * @default false
+   */
+  noToString?: boolean;
+  /**
+   * Defines that no gc Synchronisation should happen. -
+   * true: All Objects shared with remote are never released
+   * (memory leak). Calling syncGc will throw an Error.
+   * SyncGc will never be scheduled. - false: syncGc will be
+   * automatically called based on scheduleGcAfterTime and
+   * scheduleGcAfterObjectCount. Also calling syncGc
+   * manually is an option. Objects Shared with remote will
+   * eventually get garbage collected.
+   *
+   * @default false
+   */
+  doNotSyncGc?: boolean;
+  /**
+   * Amount of time in milliseconds after syncGc is
+   * automatically scheduled again. Value of 0 means never.
+   *
+   * @default 30000
+   */
+  scheduleGcAfterTime?: number;
+  /**
+   * Number of Garbage Collected Objects after a syncGc
+   * should be scheduled. Value of 0 means never.
+   *
+   * @default 200
+   */
+  scheduleGcAfterObjectCount?: number;
+  /**
+   * Amount of expected network latency in milliseconds.
+   * This is needed to fix GarbageCollection is a request
+   * was lost or faulty. This does not include processing
+   * time of the Request itself. It is the maximum amount of
+   * time to send and receive a message from remote. If a
+   * Message exceeds this Time the corresponding objects
+   * might get Garbage Collected even if there are used by
+   * remote. Plan a healthy amount of reserve. If many
+   * Objects a created, this delays when they are checked.
+   *
+   * @default 5000
+   */
+  requestLatency?: number;
+}
+
+// ┬┌┐┌┌┬┐┌─┐┬─┐┌┐┌┌─┐┬    ┌┬┐┬ ┬┌─┐┌─┐┌─┐
+// ││││ │ ├┤ ├┬┘│││├─┤│     │ └┬┘├─┘├┤ └─┐
+// ┴┘└┘ ┴ └─┘┴└─┘└┘┴ ┴┴─┘   ┴  ┴ ┴  └─┘└─┘
+
+/** Metadata of an local Gc Item. */
+type GcIdDescription = {
+  /** Id ig the local gc item. */
+  id: GcId;
+  /** Last Time the local item was sent to remote. */
+  time: number;
+  /** The local Item. */
+  value: symbol | {};
+};
+
+/** Map from GcId to the Object description with that id. */
+type GcObjectMap = Map<GcId, GcObjectDescription>;
+
+/** All Possible types for an object Key (string or symbol). */
+type Key = string | symbol;
+
+/** Type for caching the evaluated Function Description. */
+type ResolvedFunctionDescription = {
+  /** Map of all the Own Keys with its parameters. */
+  ownKeys: Map<Key, { configurable: true; enumerable: boolean }>;
+  /**
+   * List of all the Keys wich exist on the function (empty
+   * list if Prototype is not Null).
+   */
+  hasKeys: Key[];
+  /** Prototype of the function. Null when it does not exist. */
+  prototype: {} | null;
+  /** Prototype property of the function. */
+  functionPrototype: unknown;
+};
+
+/** Type for caching the evaluated Object Description. */
+type ResolvedObjectDescription = {
+  /** Map of all the Own Keys with its parameters. */
+  ownKeys: Map<Key, { configurable: true; enumerable: boolean }>;
+  /**
+   * List of all the Keys wich exist on the object (empty
+   * list if Prototype is not Null).
+   */
+  hasKeys: Key[];
+  /** Prototype of the Object. Null when it does not exist. */
+  prototype: {} | null;
+};
+
+/** Object which may have a Symbol. */
+export type MayHaveSymbol<T> = {
+  /**
+   * Index signature to show that an Object may have a
+   * Symbol as a Key.
+   */
+  [key: symbol]: T | undefined;
+};
+
+// ##     ##    ###    #### ##    ##     ######  ##          ###     ######   ######
+// ###   ###   ## ##    ##  ###   ##    ##    ## ##         ## ##   ##    ## ##    ##
+// #### ####  ##   ##   ##  ####  ##    ##       ##        ##   ##  ##       ##
+// ## ### ## ##     ##  ##  ## ## ##    ##       ##       ##     ##  ######   ######
+// ##     ## #########  ##  ##  ####    ##       ##       #########       ##       ##
+// ##     ## ##     ##  ##  ##   ###    ##    ## ##       ##     ## ##    ## ##    ##
+// ##     ## ##     ## #### ##    ##     ######  ######## ##     ##  ######   ######
+
+/**
+ * Class to handle object Caching and Translation of
+ * ObjectDescriptions to RemoteObjects.
  */
 export class ObjectStore {
   /** The interface to the RequestHandler Instance. */
@@ -50,11 +229,15 @@ export class ObjectStore {
   #options: Required<ObjectStoreOptions>;
   /** The Symbol this Instance uses to Access the Proxy Data. */
   #symbolProxyData: symbol = Symbol();
-  /** Last id wich was generated, used to generate the next id. */
+  /**
+   * Last id wich was generated, used to generate the next
+   * id.
+   */
   #lastId: number = 0;
   /**
-   * List of all Objects and Symbols wich where send to the Remote to.
-   * Is mapping from an Value to its description.
+   * List of all Objects and Symbols wich where send to the
+   * Remote to. Is mapping from an Value to its
+   * description.
    */
   #descFromLocalValue: WeakMap<object | symbol, GcIdDescription> = new WeakMap();
   /**
@@ -65,34 +248,42 @@ export class ObjectStore {
   /** Keeps track of the newly generated GcIds. */
   #newLocalIds: Map<number, GcIdDescription> = new Map();
   /**
-   * List of all Objects (Symbol | {}) wich where received by the Remote with a number id.
-   * Is Mapping from an Remote Id to a WeakReference of Promise of the Value.
-   * We want the value to get be Garbage Collected, if no longer used.
+   * List of all Objects (Symbol | {}) wich where received
+   * by the Remote with a number id. Is Mapping from an
+   * Remote Id to a WeakReference of Promise of the Value.
+   * We want the value to get be Garbage Collected, if no
+   * longer used.
    */
   #valueFromRemoteNumberId: Map<number, Promise<WeakRef<object | symbol>>> = new Map();
   /**
-   * List of all Objects (Symbol | {}) wich where received by the Remote with a string id.
-   * Is Mapping from an Remote Id to a Promise of the Value.
-   * String Ids should be held on to, because these are manually generated by library user.
+   * List of all Objects (Symbol | {}) wich where received
+   * by the Remote with a string id. Is Mapping from an
+   * Remote Id to a Promise of the Value. String Ids should
+   * be held on to, because these are manually generated by
+   * library user.
    */
   #valueFromRemoteStringId: Map<string, Promise<object | symbol>> = new Map();
-  /** Keeps track of all remote ids wich values where Garbage Collected. */
+  /**
+   * Keeps track of all remote ids wich values where Garbage
+   * Collected.
+   */
   #deletedRemoteIds: Set<number> = new Set();
   /**
-   * List of all the Symbols received from Remote to their id.
-   * Needed to translate it back to the Original id on the Remote side.
+   * List of all the Symbols received from Remote to their
+   * id. Needed to translate it back to the Original id on
+   * the Remote side.
    */
   #remoteSymbolIds: WeakMap<symbol, GcId> = new WeakMap();
   /**
-   * Used for registering all values, wich might be garbage Collected.
-   * Will call a Callback to do cleanup.
+   * Used for registering all values, wich might be garbage
+   * Collected. Will call a Callback to do cleanup.
    */
   #finalizationRegister: FinalizationRegistry<number>["register"];
   /** Timer id used for GC Sync calls. */
   #syncGcTimer: number | undefined = undefined;
   /**
-   * Remembers, if syncGc was Scheduled for immediate execution.
-   * Prevents recreating timers all the time.
+   * Remembers, if syncGc was Scheduled for immediate
+   * execution. Prevents recreating timers all the time.
    */
   #syncGcScheduled: boolean = false;
   /** Prevents two syncGc Calls to be active at once. */
@@ -101,8 +292,10 @@ export class ObjectStore {
   /**
    * Creates a new ObjectStore.
    *
-   * @param requestHandler - Interface describing a RequestHandler.
-   * @param options - Options on how the ObjectStore should operate (options should be the same for remote).
+   * @param requestHandler - Interface describing a
+   *   RequestHandler.
+   * @param options - Options on how the ObjectStore should
+   *   operate (options should be the same for remote).
    */
   constructor(requestHandler: RequestHandlerInterface, options: ObjectStoreOptions = {}) {
     this.#options = {
@@ -139,11 +332,12 @@ export class ObjectStore {
   /**
    * Stores a object or function to be used by the remote.
    *
-   * @param id - A string with wich the remote can request this object.
-   * @param object - Object or function to share with remote.
-   * @public
+   * @param id - A string with wich the remote can request
+   *   this object.
+   * @param object - Object or function to share with
+   *   remote.
    */
-  exposeRemoteObject(id: string, value: RemoteObjectAble): void {
+  exposeRemoteObject(id: string, value: RemoteAble): void {
     this.#checkClosed();
     if (typeof value !== "object" && typeof value !== "function") {
       throw new Error("Only objects and functions can be exposed as remote objects.");
@@ -161,41 +355,47 @@ export class ObjectStore {
   }
 
   /**
-   * Will get the description of an Object from Remote and returns a local Proxy wich represents this Object.
-   * Will request the metadata of the object from remote the first time for every id.
-   * Use this method if you need to use 'key in object', 'object instanceof class', 'Object.keys(object)' or similar.
-   * Use getRemoteProxy if you don't need to use these operations because it does not need to request data from remote.
+   * Will get the description of an Object from Remote and
+   * returns a local Proxy wich represents this Object. Will
+   * request the metadata of the object from remote the
+   * first time for every id. Use this method if you need to
+   * use 'key in object', 'object instanceof class',
+   * 'Object.keys(object)' or similar. Use getRemoteProxy if
+   * you don't need to use these operations because it does
+   * not need to request data from remote.
    *
    * @param id - Id of the object or function to request.
-   * @returns A Promise resolving to a Proxy wich represents this object.
-   * @public
+   * @returns A Promise resolving to a Proxy wich represents
+   * this object.
    */
-  async requestRemoteObject<const T extends RemoteObjectAble>(id: string): Promise<RemoteObject<T>> {
+  async requestRemoteObject<const T extends RemoteAble>(id: string): Promise<RemoteReadonly<T>> {
     this.#checkClosed();
-    return <RemoteObject<T>>await this.#requestValue({ type: "root", id });
+    return <RemoteReadonly<T>>await this.#requestValue({ type: "root", id });
   }
 
   /**
    * Will return a local Proxy wich represents this Object.
-   * This does not Request any data from remote.
-   * This will initially succeed, even if the id is not exposed on remote (will only fail on the first request to remote).
-   * Use getRemoteObject if you need to use 'key in object', 'object instanceof class', 'Object.keys(object)' or similar.
+   * This does not Request any data from remote. This will
+   * initially succeed, even if the id is not exposed on
+   * remote (will only fail on the first request to remote).
+   * Use getRemoteObject if you need to use 'key in object',
+   * 'object instanceof class', 'Object.keys(object)' or
+   * similar.
    *
    * @param id - Id of the object or function to request.
    * @returns A Proxy wich represents this object.
-   * @public
    */
-  getRemoteObject<const T extends RemoteObjectAble>(id: string): RemoteObject<T> {
+  getRemoteObject<const T extends RemoteAble>(id: string): RemoteReadonly<T> {
     this.#checkClosed();
-    return <RemoteObject<T>>this.#createRemoteProxy({ type: "root", id });
+    return <RemoteReadonly<T>>this.#createRemoteProxy({ type: "root", id });
   }
 
   /**
-   * This function should be called for every Message received from remote.
-   * This will call the newMessageHandler on the RequestHandler if defined.
+   * This function should be called for every Message
+   * received from remote. This will call the
+   * newMessageHandler on the RequestHandler if defined.
    *
    * @param data - The data wich was received from remote.
-   * @public
    */
   newMessage(data: Transferable): void {
     if (!this.#requestHandler.newMessageHandler) {
@@ -204,14 +404,17 @@ export class ObjectStore {
     return this.#requestHandler.newMessageHandler(data);
   }
 
-  /** This function should be called if the connection to the remote is lost (for cleanup). */
+  /**
+   * This function should be called if the connection to the
+   * remote is lost (for cleanup).
+   */
   disconnectedHandler(): void {
     this.close();
   }
 
   /**
-   * Call this to Close the Connection.
-   * Also Calls to the disconnectHandler on the RequestHandler.
+   * Call this to Close the Connection. Also Calls to the
+   * disconnectHandler on the RequestHandler.
    */
   close(): void {
     if (this.#closed) return;
@@ -230,12 +433,15 @@ export class ObjectStore {
   }
 
   /**
-   * This function should be invoked for every request to the Remote.
-   * It needs to be called with the data of the Remote ObjectStore.
-   * The return value should be returned to the Remote ObjectStore.
+   * This function should be invoked for every request to
+   * the Remote. It needs to be called with the data of the
+   * Remote ObjectStore. The return value should be returned
+   * to the Remote ObjectStore.
    *
-   * @param request - The request information from Remote (JSON Compatible).
-   * @returns A Promise containing the response for the Request to send to Remote (JSON Compatible).
+   * @param request - The request information from Remote
+   *   (JSON Compatible).
+   * @returns A Promise containing the response for the
+   * Request to send to Remote (JSON Compatible).
    */
   async requestHandler(request: Transferable): Promise<Transferable> {
     this.#checkClosed();
@@ -270,7 +476,10 @@ export class ObjectStore {
     return this.#syncGc();
   }
 
-  /** Internal SyncGc Method which does not throw on connection or doNotSync setting. */
+  /**
+   * Internal SyncGc Method which does not throw on
+   * connection or doNotSync setting.
+   */
   #syncGc(): void {
     if (this.#closed || this.#syncGcBusy) return;
     this.#syncGcBusy = true;
@@ -286,11 +495,13 @@ export class ObjectStore {
   }
 
   /**
-   * Handles a syncGc Message from remote and will delete References accordingly.
-   * Will also report, if newItems are known or not.
+   * Handles a syncGc Message from remote and will delete
+   * References accordingly. Will also report, if newItems
+   * are known or not.
    *
    * @param request - Request from Remote.
-   * @returns Response object with a list of all successfully deleted ids and all unknown ids.
+   * @returns Response object with a list of all
+   * successfully deleted ids and all unknown ids.
    */
   #syncGcHandler(request: SyncGcRequest): SyncGcResponse {
     const deletedItems: number[] = [];
@@ -327,7 +538,10 @@ export class ObjectStore {
     };
   }
 
-  /** Does the real computation an sending the Request for GcSync. */
+  /**
+   * Does the real computation an sending the Request for
+   * GcSync.
+   */
   async #internalSyncGc(): Promise<void> {
     try {
       this.#checkClosed();
@@ -379,7 +593,10 @@ export class ObjectStore {
     } catch {}
   }
 
-  /** Resets the timer to 0 ms so syncGc is executed as early as possible; */
+  /**
+   * Resets the timer to 0 ms so syncGc is executed as early
+   * as possible;
+   */
   #scheduleSyncGcImmediate() {
     if (this.#syncGcScheduled || this.#syncGcBusy) return;
     if (this.#syncGcTimer !== undefined) clearTimeout(this.#syncGcTimer);
@@ -410,8 +627,10 @@ export class ObjectStore {
    * Registers GcObjects th the Cache to be accessed later.
    * Deletes the Id, in deletedRemoteIds set.
    *
-   * @param description - Description of the Object to Generate.
-   * @returns The Object to avoid the object being garbage collected during the Request.
+   * @param description - Description of the Object to
+   *   Generate.
+   * @returns The Object to avoid the object being garbage
+   * collected during the Request.
    */
   #pregenerateGcValue(description: GcObjectDescription): Promise<{} | symbol> {
     const id = description.id;
@@ -466,7 +685,8 @@ export class ObjectStore {
   }
 
   /**
-   * Resolves a Local Value by following the Path if it exists.
+   * Resolves a Local Value by following the Path if it
+   * exists.
    *
    * @param description - Description of the local Value.
    * @returns The Value.
@@ -521,7 +741,8 @@ export class ObjectStore {
   /**
    * Generated a Value based on its Description.
    *
-   * @param description - Description of the value to be generated.
+   * @param description - Description of the value to be
+   *   generated.
    * @returns The value wich should be generated.
    */
   async #createValue(description: ValueDescription): Promise<unknown> {
@@ -549,8 +770,9 @@ export class ObjectStore {
   }
 
   /**
-   * Looks up remote Id in cache.
-   * Value must be in Cache because pregenerateGcValue gets called before handling the Request.
+   * Looks up remote Id in cache. Value must be in Cache
+   * because pregenerateGcValue gets called before handling
+   * the Request.
    *
    * @param description
    * @returns
@@ -574,7 +796,8 @@ export class ObjectStore {
   /**
    * Creates a Value from Remote transmitted via gcObjects.
    *
-   * @param description - Description of the Value to create.
+   * @param description - Description of the Value to
+   *   create.
    * @returns Promise of the Value.
    */
   async #createGcValue(description: GcObjectDescription, old: Promise<symbol | {} | undefined> | undefined): Promise<symbol | {}> {
@@ -589,7 +812,8 @@ export class ObjectStore {
   }
 
   /**
-   * Creates a new Symbol wich represents the Symbol from remote.
+   * Creates a new Symbol wich represents the Symbol from
+   * remote.
    *
    * @param description - Description of the Symbol.
    * @returns The new Symbol.
@@ -602,9 +826,12 @@ export class ObjectStore {
   }
 
   /**
-   * Creates a new Remote Object based on a description provided by the remote.
-   * Allows the use of getPrototypeOf, has and ownKeys if configured by the options.
-   * This allows the proxy to be used in situations like ```key in object```, ```object instanceof class```, ```Object.keys(object)``` or similar.
+   * Creates a new Remote Object based on a description
+   * provided by the remote. Allows the use of
+   * getPrototypeOf, has and ownKeys if configured by the
+   * options. This allows the proxy to be used in situations
+   * like `key in object`, `object instanceof class`,
+   * `Object.keys(object)` or similar.
    *
    * @param desc - Description of the remote Object.
    * @returns A Proxy Object representing the remote Object.
@@ -645,10 +872,12 @@ export class ObjectStore {
   }
 
   /**
-   * Resolves a description an optionally updates a old Description.
+   * Resolves a description an optionally updates a old
+   * Description.
    *
    * @param description - The Description to resolve.
-   * @param oldDescription - The Old Description to optionally update.
+   * @param oldDescription - The Old Description to
+   *   optionally update.
    * @returns Resolved description.
    */
   async #resolveObjectDescription(description: ObjectDescription, oldDescription?: ResolvedObjectDescription): Promise<ResolvedObjectDescription> {
@@ -663,9 +892,12 @@ export class ObjectStore {
   }
 
   /**
-   * Creates a new Remote Object based on a description provided by the remote.
-   * Allows the use of getPrototypeOf, has and ownKeys if configured by the options.
-   * This allows the proxy to be used in situations like ```key in object```, ```object instanceof class```, ```Object.keys(object)``` or similar.
+   * Creates a new Remote Object based on a description
+   * provided by the remote. Allows the use of
+   * getPrototypeOf, has and ownKeys if configured by the
+   * options. This allows the proxy to be used in situations
+   * like `key in object`, `object instanceof class`,
+   * `Object.keys(object)` or similar.
    *
    * @param desc - Description of the remote Object.
    * @returns A Proxy Object representing the remote Object.
@@ -698,9 +930,22 @@ export class ObjectStore {
       ownKeys(_target: unknown): (string | symbol)[] {
         return [...description.ownKeys.keys()];
       },
-      getOwnPropertyDescriptor(_target: unknown, property: string | symbol): { configurable: boolean; enumerable: boolean; writable?: boolean } | undefined {
+      getOwnPropertyDescriptor(
+        _target: unknown,
+        property: string | symbol,
+      ):
+        | {
+            configurable: boolean;
+            enumerable: boolean;
+            writable?: boolean;
+          }
+        | undefined {
         if (functionWithPrototype && property === "prototype") {
-          return { configurable: false, enumerable: false, writable: true };
+          return {
+            configurable: false,
+            enumerable: false,
+            writable: true,
+          };
         }
         return description.ownKeys.get(property);
       },
@@ -708,19 +953,29 @@ export class ObjectStore {
   }
 
   /**
-   * Resolves a description an optionally updates a old Description.
+   * Resolves a description an optionally updates a old
+   * Description.
    *
    * @param description - The Description to resolve.
-   * @param oldDescription - The Old Description to optionally update.
+   * @param oldDescription - The Old Description to
+   *   optionally update.
    * @returns Resolved description.
    */
-  async #resolveFunctionDescription(description: FunctionDescription, oldDescription?: ResolvedFunctionDescription): Promise<ResolvedFunctionDescription> {
+  async #resolveFunctionDescription(
+    description: FunctionDescription,
+    oldDescription?: ResolvedFunctionDescription,
+  ): Promise<ResolvedFunctionDescription> {
     const ownKeys = await this.#createOwnKeysMap(description.ownKeys);
     const hasKeys = await Promise.all(description.hasKeys.map((v) => this.#createKeyValue(v)));
     const prototype = (await this.#createValue(description.prototype)) as {} | null;
     const functionPrototype = await this.#createValue(description.functionPrototype);
     if (oldDescription === undefined) {
-      return { ownKeys, hasKeys, prototype, functionPrototype };
+      return {
+        ownKeys,
+        hasKeys,
+        prototype,
+        functionPrototype,
+      };
     }
     oldDescription.ownKeys = ownKeys;
     oldDescription.hasKeys = hasKeys;
@@ -732,7 +987,8 @@ export class ObjectStore {
   /**
    * Request a Value from remote.
    *
-   * @param remotePath - The description on how to get this data (description of properties and function calls).
+   * @param remotePath - The description on how to get this
+   *   data (description of properties and function calls).
    * @returns The value of the requested data.
    */
   async #requestValue(remotePath: RemotePath): Promise<unknown> {
@@ -744,7 +1000,8 @@ export class ObjectStore {
   }
 
   /**
-   * Describes all the Values associated with a value request.
+   * Describes all the Values associated with a value
+   * request.
    *
    * @param remotePath - The Request to Describe.
    * @returns The Description of the Request.
@@ -763,7 +1020,8 @@ export class ObjectStore {
    * If the Promise rejects the error is described.
    *
    * @param promise - The Promise to await.
-   * @returns The Description of the resolved value or rejected Error.
+   * @returns The Description of the resolved value or
+   * rejected Error.
    */
   async #describePromise(promise: Promise<unknown>, gcObjects: GcObjectMap): Promise<ResponseValueDescription> {
     try {
@@ -779,7 +1037,10 @@ export class ObjectStore {
         if (error.name !== undefined) ret.name = error.name;
         return ret;
       }
-      return { type: "error", value: this.#describeValue(error, gcObjects) };
+      return {
+        type: "error",
+        value: this.#describeValue(error, gcObjects),
+      };
     }
   }
 
@@ -900,7 +1161,10 @@ export class ObjectStore {
   #describeSymbol(symbol: symbol, gcObjects: GcObjectMap): LocalizedGcId {
     const id = this.#remoteSymbolIds.get(symbol);
     if (id !== undefined) return { type: "remote", id };
-    return { type: "local", id: this.#describeLocalSymbol(symbol, gcObjects) };
+    return {
+      type: "local",
+      id: this.#describeLocalSymbol(symbol, gcObjects),
+    };
   }
 
   /**
@@ -916,7 +1180,10 @@ export class ObjectStore {
     if (proxyData !== undefined) {
       return this.#describeRemoteValuePath(proxyData, gcObjects);
     }
-    return { type: "local", id: this.#describeLocalObject(object, gcObjects) };
+    return {
+      type: "local",
+      id: this.#describeLocalObject(object, gcObjects),
+    };
   }
 
   /**
@@ -931,7 +1198,10 @@ export class ObjectStore {
     if (proxyData !== undefined) {
       return this.#describeRemoteValuePath(proxyData, gcObjects);
     }
-    return { type: "local", id: this.#describeLocalFunction(fn, gcObjects) };
+    return {
+      type: "local",
+      id: this.#describeLocalFunction(fn, gcObjects),
+    };
   }
 
   /**
@@ -955,12 +1225,19 @@ export class ObjectStore {
     if (this.#options.remoteObjectPrototype === "full") {
       prototype = this.#describeObject(Reflect.getPrototypeOf(localObject), gcObjects);
     }
-    gcObjects.set(id, { type: "object", id, ownKeys, hasKeys, prototype });
+    gcObjects.set(id, {
+      type: "object",
+      id,
+      ownKeys,
+      hasKeys,
+      prototype,
+    });
     return id;
   }
 
   /**
-   * Describes a local Function and adds it to the gcObjects.
+   * Describes a local Function and adds it to the
+   * gcObjects.
    *
    * @param localFunction - The Function to describe.
    * @param gcObjects - The Objects to send along.
@@ -1006,8 +1283,9 @@ export class ObjectStore {
   }
 
   /**
-   * Get the ID of an Local Value.
-   * Id the Local object is not in the local Cache (localGcObjectIds), create a new id.
+   * Get the ID of an Local Value. Id the Local object is
+   * not in the local Cache (localGcObjectIds), create a new
+   * id.
    *
    * @param value - The value for wich to retrieve the id.
    * @returns The id to be used together with this value.
@@ -1029,17 +1307,27 @@ export class ObjectStore {
 
   /**
    * Generates a new Proxy Object without any description.
-   * Does not Support getPrototypeOf, has and ownKeys.
-   * If these need to be used the Proxy needs to be awaited first to request this information from remote.
-   * It will create new Proxies for property accesses, function calls, constructions and set calls.
-   * A Request to the remote is only trigged if a value is awaited (a call to then) or the set Method is called.
-   * Even Function calls are only trigged when their result is awaited.
+   * Does not Support getPrototypeOf, has and ownKeys. If
+   * these need to be used the Proxy needs to be awaited
+   * first to request this information from remote. It will
+   * create new Proxies for property accesses, function
+   * calls, constructions and set calls. A Request to the
+   * remote is only trigged if a value is awaited (a call to
+   * then) or the set Method is called. Even Function calls
+   * are only trigged when their result is awaited.
    *
-   * @param parent - Description of the Path as an linked list (parent field).
-   * @param base - Target object to be used with the Proxy (default = new Function()).
-   * @param resolveAsPromise - Defines if then has an effect on the Proxy. Will prevent endless then loop (default = true).
-   * @param functionPrototype - If not equal to undefined, this value will be returned for the prototype field (default = undefined).
-   * @param additionalHandlers - Extra handlers to provide extra functionality to the Proxy.
+   * @param parent - Description of the Path as an linked
+   *   list (parent field).
+   * @param base - Target object to be used with the Proxy
+   *   (default = new Function()).
+   * @param resolveAsPromise - Defines if then has an effect
+   *   on the Proxy. Will prevent endless then loop (default
+   *   = true).
+   * @param functionPrototype - If not equal to undefined,
+   *   this value will be returned for the prototype field
+   *   (default = undefined).
+   * @param additionalHandlers - Extra handlers to provide
+   *   extra functionality to the Proxy.
    * @returns A Proxy Object representing the remote Object.
    */
   #createRemoteProxy(parent: ExtendableRemotePath, base: {} = functionDefinition, additionalHandlers: ProxyHandler<{}> = {}): {} {
@@ -1051,7 +1339,7 @@ export class ObjectStore {
             return (onfulfilled: () => void, onrejected: () => void): void => {
               this.#requestValue(parent).then(onfulfilled, onrejected);
             };
-          case "set":
+          case SET:
             return async (value: unknown): Promise<void> => {
               if (parent.type !== "get") {
                 throw new TypeError("Cannot write to a RemoteObject or Return Value. Only properties can be set.");
@@ -1080,16 +1368,28 @@ export class ObjectStore {
             return undefined;
           case this.#symbolProxyData:
             return parent;
-          case isProxySymbol:
+          case REMOTE_MARKER:
             return true;
         }
-        return this.#createRemoteProxy({ type: "get", name, parent });
+        return this.#createRemoteProxy({
+          type: "get",
+          name,
+          parent,
+        });
       },
       apply: (_target: unknown, _thisArg: unknown, args: unknown[]): {} => {
-        return this.#createRemoteProxy({ type: "call", args, parent });
+        return this.#createRemoteProxy({
+          type: "call",
+          args,
+          parent,
+        });
       },
       construct: (_target: unknown, args: unknown[], _newTarget: unknown): {} => {
-        return this.#createRemoteProxy({ type: "new", args, parent });
+        return this.#createRemoteProxy({
+          type: "new",
+          args,
+          parent,
+        });
       },
       ...additionalHandlers,
     };
@@ -1101,7 +1401,8 @@ export class ObjectStore {
    * Generates a Map describing all own keys.
    *
    * @param ownKeys - An Array of all own keys.
-   * @returns A Map containing this description based on key.
+   * @returns A Map containing this description based on
+   * key.
    */
   async #createOwnKeysMap(ownKeys: OwnKeyDescription[]): Promise<Map<string | symbol, { configurable: true; enumerable: boolean }>> {
     return new Map(
@@ -1121,10 +1422,12 @@ export class ObjectStore {
   }
 
   /**
-   * Returns the internal data of the Proxy if value is a Proxy.
+   * Returns the internal data of the Proxy if value is a
+   * Proxy.
    *
    * @param value - Any value which is maybe an Proxy.
-   * @returns The internal Data of the Proxy or undefined if value is not a Proxy.
+   * @returns The internal Data of the Proxy or undefined if
+   * value is not a Proxy.
    */
   #getProxyData(value: Function | object): ExtendableRemotePath | undefined {
     return (<MayHaveSymbol<ExtendableRemotePath>>value)[this.#symbolProxyData];
@@ -1132,20 +1435,25 @@ export class ObjectStore {
 
   /**
    * Called whenever a remote object was garbage collected.
-   * Will remove the Objects form cache and remember the id to inform remote later.
+   * Will remove the Objects form cache and remember the id
+   * to inform remote later.
    *
-   * @param id - The id of the object wich was garbage collected.
+   * @param id - The id of the object wich was garbage
+   *   collected.
    */
   #cleanupObject(id: number): void {
     this.#deletedRemoteIds.add(id);
-    if (this.#options.scheduleGcAfterObjectCount !== 0 && this.#deletedRemoteIds.size >= this.#options.scheduleGcAfterObjectCount) this.#scheduleSyncGcImmediate();
+    if (this.#options.scheduleGcAfterObjectCount !== 0 && this.#deletedRemoteIds.size >= this.#options.scheduleGcAfterObjectCount)
+      this.#scheduleSyncGcImmediate();
     this.#valueFromRemoteNumberId.delete(id);
   }
 
   /**
-   * Generates a new number as RemoteId to uniquely identify an object.
+   * Generates a new number as RemoteId to uniquely identify
+   * an object.
    *
-   * @returns A number wich is not used by any other objects.
+   * @returns A number wich is not used by any other
+   * objects.
    */
   #nextId(): number {
     while (true) {
@@ -1165,27 +1473,26 @@ export class ObjectStore {
   }
 }
 
-/** Symbol for marking RemoteObjects and Proxies for identifying them. */
-const isProxySymbol: unique symbol = Symbol();
-
 /**
  * Returns true if it is given a RemoteObject Proxy.
  *
- * @param object - Any Value to test if it represents a proxy.
- * @returns Boolean indicating if object is a RemoteObject Proxy.
- * @public
+ * @param object - Any Value to test if it represents a
+ *   proxy.
+ * @returns Boolean indicating if object is a RemoteObject
+ * Proxy.
  */
 export function isProxy(object: unknown): boolean {
   if (typeof object !== "function" && typeof object !== "object") return false;
   if (object === null) return false;
-  return !!(object as MayHaveSymbol<boolean>)[isProxySymbol];
+  return !!(object as Partial<RemoteMarker<boolean>>)[REMOTE_MARKER];
 }
 
 /**
- * Creates a unique array of Keys of the Object and its Prototype chain.
+ * Creates a unique array of Keys of the Object and its
+ * Prototype chain.
  *
- * @param object - Object to list all the keys of (also of Prototype chain).
- * @returns An array of keys.
+ * @param object - Object to list all the keys of (also of
+ *   Prototype chain).
  */
 function getAllKeys(object: {}): (string | symbol)[] {
   const ret: Set<string | symbol> = new Set();
@@ -1200,11 +1507,12 @@ function getAllKeys(object: {}): (string | symbol)[] {
 }
 
 /**
- * Creates an Error Class most closely representing the remote Error.
+ * Creates an Error Class most closely representing the
+ * remote Error.
  *
- * @param description - Description of the Error to be created.
+ * @param description - Description of the Error to be
+ *   created.
  * @param cause - RemoteObject of the remote Error.
- * @returns An Error Object.
  */
 function createError(description: ErrorDescription, cause: unknown): unknown {
   if (!isProxy(cause)) {
@@ -1239,14 +1547,18 @@ function createError(description: ErrorDescription, cause: unknown): unknown {
 }
 
 /**
- * Prevents the garbage collection of a value until the end of the current task.
+ * Prevents the garbage collection of a value until the end
+ * of the current task.
  *
- * @param _value - The value to prevent from being garbage collected.
+ * @param _value - The value to prevent from being garbage
+ *   collected.
  */
 function preventGcOf(_value: unknown): void {}
 
 /** Object representing undefined. */
-const undefinedDescription: UndefinedDescription = { type: "undefined" };
+const undefinedDescription: UndefinedDescription = {
+  type: "undefined",
+};
 
 /** Object representing null. */
 const nullDescription: NullDescription = { type: "null" };
@@ -1292,3 +1604,87 @@ const UnsupportedHandlers: ProxyHandler<{}> = {
     return false;
   },
 };
+
+// ┬┌┐┌┌┬┐┌─┐┬─┐┌┐┌┌─┐┬    ┌┬┐┌─┐┌┬┐┌─┐┌─┐┬─┐┌─┐┬─┐┬ ┬  ┬─┐┌─┐┌─┐┬─┐┌─┐┌─┐┌─┐┌┐┌┌┬┐┌─┐┌┬┐┬┌─┐┌┐┌  ┌─┐┌─┐  ┌─┐  ┬─┐┌─┐┌┬┐┌─┐┌┬┐┌─┐┌─┐┌─┐┌┬┐┬ ┬
+// ││││ │ ├┤ ├┬┘│││├─┤│     │ ├┤ │││├─┘│ │├┬┘├─┤├┬┘└┬┘  ├┬┘├┤ ├─┘├┬┘├┤ └─┐├┤ │││ │ ├─┤ │ ││ ││││  │ │├┤   ├─┤  ├┬┘├┤ ││││ │ │ ├┤ ├─┘├─┤ │ ├─┤
+// ┴┘└┘ ┴ └─┘┴└─┘└┘┴ ┴┴─┘   ┴ └─┘┴ ┴┴  └─┘┴└─┴ ┴┴└─ ┴   ┴└─└─┘┴  ┴└─└─┘└─┘└─┘┘└┘ ┴ ┴ ┴ ┴ ┴└─┘┘└┘  └─┘└    ┴ ┴  ┴└─└─┘┴ ┴└─┘ ┴ └─┘┴  ┴ ┴ ┴ ┴ ┴
+
+/**
+ * The Root of all RemotePaths. The top most Parent always
+ * needs to be a RootPathSegment.
+ */
+type RootPathSegment = {
+  /** Type of the Segment. */
+  type: "root";
+  /** Remote Id of the Remote Object. */
+  id: GcId;
+  /**
+   * Description of the Remote Object, to support stuff like
+   * hasKey.
+   */
+  description?: ResolvedObjectDescription | ResolvedFunctionDescription;
+};
+
+/** Path segment representing reading of an property. */
+type GetPathSegment = {
+  /** Type of the Segment. */
+  type: "get";
+  /** Name of the property to read. */
+  name: Key;
+  /** Parent Segment representing an object. */
+  parent: ExtendableRemotePath;
+};
+
+/** Path segment representing the Assignment of an property. */
+type SetPathSegment = {
+  /** Type of the Segment. */
+  type: "set";
+  /** Name of the Property to set. */
+  name: Key;
+  /** Value to assign to the property. */
+  value: unknown;
+  /** Parent Segment representing an object. */
+  parent: ExtendableRemotePath;
+};
+
+/** Path segment representing the call of an function. */
+type CallPathSegment = {
+  /** Type of the Segment. */
+  type: "call";
+  /** List of all the Arguments to this function call. */
+  args: unknown[];
+  /**
+   * Parent Segment wich is getting called.
+   * Probably value referencing a function.
+   */
+  parent: ExtendableRemotePath;
+};
+
+/** Path segment representing the creation of an object. */
+type NewPathSegment = {
+  /** Type of the Segment. */
+  type: "new";
+  /** List of Arguments to the constructor. */
+  args: unknown[];
+  /**
+   * Parent Segment wich is getting called.
+   * Probably value referencing a constructor.
+   */
+  parent: ExtendableRemotePath;
+};
+
+/**
+ * All Path Segments which can be extended (Can be the
+ * Parent of an ExtendingRemotePath; currently everything
+ * except SetPathSegment).
+ */
+type ExtendableRemotePath = RootPathSegment | GetPathSegment | NewPathSegment | CallPathSegment;
+
+/**
+ * All Path Segments which are based on a Parent segment
+ * (Every Segment type except RootPathSegment).
+ */
+type ExtendingRemotePath = GetPathSegment | NewPathSegment | CallPathSegment | SetPathSegment;
+
+/** Description of a remote Path (Object + some operations). */
+type RemotePath = ExtendableRemotePath | SetPathSegment;
