@@ -5,31 +5,36 @@ type RemoteAbleConstructor = new (...args: any[]) => any;
 /** Anything which can be exposed to the Remote. */
 export type RemoteAble = RemoteAbleObject | RemoteAbleFunction | RemoteAbleConstructor;
 
-/** Is mapping the RemoteAble from the Remote to how the types are represented locally. */
-export type RemoteObject<T extends RemoteAble> = T extends RemoteAbleConstructor ? OldRemoteConstructorPromise<T> : T extends RemoteAbleFunction ? OldRemoteFunctionPromise<T> : T extends RemoteAbleObject ? RemoteObj<T> : never;
-
 /** Symbol to set a value on the Remote. */
 export const SET = Symbol("set");
 
 /** The list of primitive Types. */
 type Primitives = string | number | boolean | null | undefined | void | bigint | symbol;
 
-type Remote<T> = [T] extends [Primitives] ? RemotePrimitive<T> : T extends [unknown] ? RemoteUnknown : never;
+type Remote<T> = RemoteReadonly<T> & RemoteSet<T>;
 
-type RemoteReadonly<T> = [T] extends [Primitives] ? RemotePrimitiveReadonly<T> : T extends Remote<infer R> ? PromiseLike<R> : never;
+type RemoteReadonly<T> = RemoteGet<T> & NeverToUnknown<RemoteCall<T>>;
 
-type RemotePrimitive<T extends Primitives> = PromiseLike<T> & SetAble<T>;
+type IfEqual<X, Y, A = X, B = never> = (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y ? 1 : 2 ? A : B;
 
-type RemoteUnknown = PromiseLike<unknown> & SetAble<unknown>;
+type IfReadonly<T, K extends keyof T, Writable, Readonly> = IfEqual<{ [Q in K]: T[K] }, { -readonly [Q in K]: T[K] }, Writable, Readonly>;
+
+export type RemoteObject<T extends RemoteAble> = {
+  [K in keyof T as K]-?: IfReadonly<T, K, Remote<T[K]>, RemoteReadonly<T[K]>>;
+};
+
+type RemoteGet<T> = T extends Primitives ? PromiseLike<T> : unknown;
+
+type GetRemoteSetAble<T> = T extends Primitives ? T : unknown;
 
 /** Helper for Values which can be set on the Remote. */
-type SetAble<T> = {
-  [SET]: (value: T) => PromiseLike<void>;
+type RemoteSet<T> = {
+  [SET]: (value: GetRemoteSetAble<T>) => PromiseLike<void>;
 };
 
-type RemoteObj<T extends RemoteAbleObject> = {
-  [K in keyof T as K]-?: Remote<T[K]>;
-};
+type RemoteCall<T> = T extends (...args: infer P) => infer R ? (...args: { [K in keyof P]: P[K] }) => PromiseLike<R> : never;
+
+type NeverToUnknown<T> = [T] extends [never] ? unknown : T;
 
 // ┌─┐┬  ┌┬┐  ┌─┐┌┬┐┬ ┬┌─┐┌─┐
 // │ ││   ││  └─┐ │ │ │├┤ ├┤
@@ -54,6 +59,9 @@ export type OldRemote<T> = [T] extends [never]
 type OldRemoteObj<T extends {}> = {
   [K in keyof T as K]: OldRemote<T[K]>;
 };
+
+/** Is mapping the RemoteAble from the Remote to how the types are represented locally. */
+type OldRemoteObject<T extends RemoteAble> = T extends RemoteAbleConstructor ? OldRemoteConstructorPromise<T> : T extends RemoteAbleFunction ? OldRemoteFunctionPromise<T> : T extends RemoteAbleObject ? RemoteObj<T> : never;
 
 /** Makes it possible to await an object. */
 type OldRemoteObjPromise<T extends {}> = (OldRemoteObj<T> & PromiseLike<OldRemoteObj<T>>) | OldRemoteObj<T>;
