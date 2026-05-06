@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from "vitest";
 
 import type { RequestHandlerFunction } from "./Interfaces.js";
 import { isProxy, ObjectStore, type MayHaveSymbol, type ObjectStoreOptions } from "./ObjectStore.js";
-import type { Remote } from "./remote.js";
+import type { OldRemote } from "./remote.js";
 
 // Seclarations for the Garbage Collector Node api.
 declare global {
@@ -726,7 +726,7 @@ describe("ObjectStore", () => {
       });
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      let o: Remote<Test1234> | undefined = await a.test();
+      let o: OldRemote<Test1234> | undefined = await a.test();
       await doGc();
       expect(weakRef?.deref()).not.toEqual(undefined);
       use(o);
@@ -822,7 +822,7 @@ describe("ObjectStore", () => {
       });
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      let o: Remote<Test1234> | undefined = await a.test();
+      let o: OldRemote<Test1234> | undefined = await a.test();
       await doGc();
       expect(weakRef?.deref()).not.toEqual(undefined);
       use(o);
@@ -862,7 +862,7 @@ describe("ObjectStore", () => {
         a: number = 10;
       }
       const api = {
-        async test(_: Remote<Test1234>) {
+        async test(_: OldRemote<Test1234>) {
           return 10;
         },
       };
@@ -900,7 +900,7 @@ describe("ObjectStore", () => {
         a: number = 10;
       }
       const api = {
-        async test(_: Remote<Test1234>) {
+        async test(_: OldRemote<Test1234>) {
           return 10;
         },
       };
@@ -967,7 +967,7 @@ describe("ObjectStore", () => {
       );
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      let b: Remote<Test1234> | undefined = await a.test();
+      let b: OldRemote<Test1234> | undefined = await a.test();
       expect(weakRef?.deref()).not.toEqual(undefined);
       await doGc();
       expect(weakRef?.deref()).toEqual(undefined);
@@ -1008,7 +1008,7 @@ describe("ObjectStore", () => {
       );
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      let b: Remote<Test1234> = await a.test();
+      let b: OldRemote<Test1234> = await a.test();
       expect(weakRef?.deref()).not.toEqual(undefined);
       await doGc();
       expect(weakRef?.deref()).toEqual(undefined);
@@ -1018,7 +1018,7 @@ describe("ObjectStore", () => {
     test("syncGc should work even if gcSync Request is Delayed", async () => {
       class Test1234 {}
       const api = {
-        async test(_: Remote<Test1234>) {
+        async test(_: OldRemote<Test1234>) {
           return 10;
         },
       };
@@ -1060,7 +1060,7 @@ describe("ObjectStore", () => {
     test("do not delete object if it was resend in the meantime", async () => {
       class Test1234 {}
       const api = {
-        async test(_: Remote<Test1234> | undefined) {
+        async test(_: OldRemote<Test1234> | undefined) {
           return 10;
         },
       };

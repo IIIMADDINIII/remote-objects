@@ -1,5 +1,5 @@
 import type { RequestHandlerInterface, Transferable } from "./Interfaces.js";
-import type { RemoteObject, RemoteObjectAble } from "./remote.js";
+import { SET, type RemoteAble, type RemoteObject } from "./remote.js";
 import type {
   ErrorDescription,
   FunctionDescription,
@@ -309,7 +309,7 @@ export class ObjectStore {
    * @param object - Object or function to share with remote.
    * @public
    */
-  exposeRemoteObject(id: string, value: RemoteObjectAble): void {
+  exposeRemoteObject(id: string, value: RemoteAble): void {
     this.#checkClosed();
     if (typeof value !== "object" && typeof value !== "function") {
       throw new Error("Only objects and functions can be exposed as remote objects.");
@@ -336,7 +336,7 @@ export class ObjectStore {
    * @returns A Promise resolving to a Proxy wich represents this object.
    * @public
    */
-  async requestRemoteObject<const T extends RemoteObjectAble>(id: string): Promise<RemoteObject<T>> {
+  async requestRemoteObject<const T extends RemoteAble>(id: string): Promise<RemoteObject<T>> {
     this.#checkClosed();
     return <RemoteObject<T>>await this.#requestValue({ type: "root", id });
   }
@@ -351,7 +351,7 @@ export class ObjectStore {
    * @returns A Proxy wich represents this object.
    * @public
    */
-  getRemoteObject<const T extends RemoteObjectAble>(id: string): RemoteObject<T> {
+  getRemoteObject<const T extends RemoteAble>(id: string): RemoteObject<T> {
     this.#checkClosed();
     return <RemoteObject<T>>this.#createRemoteProxy({ type: "root", id });
   }
@@ -1217,7 +1217,7 @@ export class ObjectStore {
             return (onfulfilled: () => void, onrejected: () => void): void => {
               this.#requestValue(parent).then(onfulfilled, onrejected);
             };
-          case "set":
+          case SET:
             return async (value: unknown): Promise<void> => {
               if (parent.type !== "get") {
                 throw new TypeError("Cannot write to a RemoteObject or Return Value. Only properties can be set.");

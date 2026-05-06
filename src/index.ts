@@ -36,4 +36,4 @@ export { isProxy, ObjectStore, type ObjectStoreOptions, type RemoteError, type R
 
 export type { DisconnectedHandler, MessageHandlerInterface, NewMessageHandler, RequestHandlerFunction, RequestHandlerInterface, SendMessageFunction, Transferable } from "./Interfaces.js";
 
-export type * from "./remote.js";
+export * from "./remote.js";

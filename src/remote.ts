@@ -1,138 +1,102 @@
-/**
- * Anything which can be exposed to the Remote.
- *
- * @public
- */
-export type RemoteObjectAble = object | ((...args: any[]) => any) | (new (...args: any[]) => any);
+type RemoteAbleObject = object;
+type RemoteAbleFunction = (...args: any[]) => any;
+type RemoteAbleConstructor = new (...args: any[]) => any;
 
-/**
- * Is mapping the any Type from the Remote to how the types are represented locally.
- *
- * @public
- */
-export type Remote<T> = [T] extends [never]
-  ? RemotePrimitiveReadonly<T>
+/** Anything which can be exposed to the Remote. */
+export type RemoteAble = RemoteAbleObject | RemoteAbleFunction | RemoteAbleConstructor;
+
+/** Is mapping the RemoteAble from the Remote to how the types are represented locally. */
+export type RemoteObject<T extends RemoteAble> = T extends RemoteAbleConstructor ? OldRemoteConstructorPromise<T> : T extends RemoteAbleFunction ? OldRemoteFunctionPromise<T> : T extends RemoteAbleObject ? RemoteObj<T> : never;
+
+/** Symbol to set a value on the Remote. */
+export const SET = Symbol("set");
+
+/** The list of primitive Types. */
+type Primitives = string | number | boolean | null | undefined | void | bigint | symbol;
+
+type Remote<T> = [T] extends [Primitives] ? RemotePrimitive<T> : T extends [unknown] ? RemoteUnknown : never;
+
+type RemoteReadonly<T> = [T] extends [Primitives] ? RemotePrimitiveReadonly<T> : T extends Remote<infer R> ? PromiseLike<R> : never;
+
+type RemotePrimitive<T extends Primitives> = PromiseLike<T> & SetAble<T>;
+
+type RemoteUnknown = PromiseLike<unknown> & SetAble<unknown>;
+
+/** Helper for Values which can be set on the Remote. */
+type SetAble<T> = {
+  [SET]: (value: T) => PromiseLike<void>;
+};
+
+type RemoteObj<T extends RemoteAbleObject> = {
+  [K in keyof T as K]-?: Remote<T[K]>;
+};
+
+// ┌─┐┬  ┌┬┐  ┌─┐┌┬┐┬ ┬┌─┐┌─┐
+// │ ││   ││  └─┐ │ │ │├┤ ├┤
+// └─┘┴─┘─┴┘  └─┘ ┴ └─┘└  └
+
+/** Is mapping the any Type from the Remote to how the types are represented locally. */
+export type OldRemote<T> = [T] extends [never]
+  ? OldRemotePrimitiveReadonly<T>
   : T extends new (...args: any[]) => any
-    ? RemoteConstructorPromise<T>
+    ? OldRemoteConstructorPromise<T>
     : T extends (...args: any[]) => any
-      ? RemoteFunctionPromise<T>
+      ? OldRemoteFunctionPromise<T>
       : T extends Primitives
-        ? RemotePrimitiveSettable<T>
+        ? OldRemotePrimitiveSettable<T>
         : T extends {}
-          ? RemoteObjPromise<T>
+          ? OldRemoteObjPromise<T>
           : T extends never
             ? PromiseLike<never>
             : never;
 
-/**
- * Is mapping the RemoteObjectAble from the Remote to how the types are represented locally.
- *
- * @public
- */
-export type RemoteObject<T extends RemoteObjectAble> = T extends new (...args: any[]) => any ? RemoteConstructorPromise<T> : T extends (...args: any[]) => any ? RemoteFunctionPromise<T> : T extends {} ? RemoteObjPromise<T> : never;
-
-/**
- * Is mapping a Object from the Remote to how the types are represented locally.
- *
- * @public
- */
-type RemoteObj<T extends {}> = {
-  [K in keyof T as K]: Remote<T[K]>;
+/** Is mapping a Object from the Remote to how the types are represented locally. */
+type OldRemoteObj<T extends {}> = {
+  [K in keyof T as K]: OldRemote<T[K]>;
 };
 
-/**
- * Makes it possible to await an object.
- *
- * @public
- */
-type RemoteObjPromise<T extends {}> = (RemoteObj<T> & PromiseLike<RemoteObj<T>>) | RemoteObj<T>;
+/** Makes it possible to await an object. */
+type OldRemoteObjPromise<T extends {}> = (OldRemoteObj<T> & PromiseLike<OldRemoteObj<T>>) | OldRemoteObj<T>;
 
-/**
- * Is mapping a Function from the Remote to how the types are represented locally.
- *
- * @public
- */
-type RemoteFunction<T extends (...args: any[]) => any> = T extends (...args: infer Parameters) => infer ReturnType ? RemoteObj<T> & ((...args: RemoteFunctionParameters<Parameters>) => RemoteReturnType<ReturnType>) : never;
+/** Is mapping a Function from the Remote to how the types are represented locally. */
+type OldRemoteFunction<T extends (...args: any[]) => any> = T extends (...args: infer Parameters) => infer ReturnType ? OldRemoteObj<T> & ((...args: OldRemoteFunctionParameters<Parameters>) => OldRemoteReturnType<ReturnType>) : never;
 
-/**
- * Makes it possible to await an function.
- *
- * @public
- */
-type RemoteFunctionPromise<T extends (...args: any[]) => any> = (RemoteFunction<T> & PromiseLike<RemoteFunction<T>>) | RemoteFunction<T>;
+/** Makes it possible to await an function. */
+type OldRemoteFunctionPromise<T extends (...args: any[]) => any> = (OldRemoteFunction<T> & PromiseLike<OldRemoteFunction<T>>) | OldRemoteFunction<T>;
 
-/**
- * Is mapping a Constructor from the Remote to how the types are represented locally.
- *
- * @public
- */
-type RemoteConstructor<T extends new () => any> = T extends new (...args: infer Parameters) => infer ReturnType ? RemoteObj<T> & (new (...args: RemoteFunctionParameters<Parameters>) => RemoteReturnType<ReturnType>) : never;
+/** Is mapping a Constructor from the Remote to how the types are represented locally. */
+type OldRemoteConstructor<T extends new () => any> = T extends new (...args: infer Parameters) => infer ReturnType ? OldRemoteObj<T> & (new (...args: OldRemoteFunctionParameters<Parameters>) => OldRemoteReturnType<ReturnType>) : never;
 
-/**
- * Makes it possible to await an constructor.
- *
- * @public
- */
-type RemoteConstructorPromise<T extends new () => any> = (RemoteConstructor<T> & PromiseLike<RemoteConstructor<T>>) | RemoteConstructor<T>;
+/** Makes it possible to await an constructor. */
+type OldRemoteConstructorPromise<T extends new () => any> = (OldRemoteConstructor<T> & PromiseLike<OldRemoteConstructor<T>>) | OldRemoteConstructor<T>;
 
-/**
- * Is mapping the function Parameters Types from the Remote to how the types are represented locally.
- *
- * @public
- */
-type RemoteFunctionParameters<T> = { [K in keyof T]: Local<T[K]> };
+/** Is mapping the function Parameters Types from the Remote to how the types are represented locally. */
+type OldRemoteFunctionParameters<T> = { [K in keyof T]: OldLocal<T[K]> };
 
-/**
- * Inverse to Remote<T>.
- *
- * @public
- */
-type Local<T> = T extends Primitives ? T : T extends (...args: any[]) => any ? LocalFunction<T> : T extends new (...args: any[]) => any ? LocalConstructor<T> : T extends Remote<infer R> ? R : Remote<T>;
+/** Inverse to Remote<T>. */
+type OldLocal<T> = T extends Primitives ? T : T extends (...args: any[]) => any ? OldLocalFunction<T> : T extends new (...args: any[]) => any ? OldLocalConstructor<T> : T extends OldRemote<infer R> ? R : OldRemote<T>;
 
-/**
- * Helper to convert Function Parameters Properly.
- *
- * @public
- */
-type LocalFunction<T extends (...args: any[]) => any> = T extends (...args: infer Parameters) => infer ReturnType ? (ReturnType extends PromiseLike<infer ReturnType> ? ((...args: RemoteFunctionParameters<Parameters>) => ReturnType | PromiseLike<ReturnType>) | Remote<T> : Remote<T>) : never;
-
-/**
- * Helper to convert Constructor Parameters Properly.
- *
- * @public
- */
-type LocalConstructor<T extends new (...args: any[]) => any> = T extends new (...args: infer Parameters) => infer ReturnType
+/** Helper to convert Function Parameters Properly. */
+type OldLocalFunction<T extends (...args: any[]) => any> = T extends (...args: infer Parameters) => infer ReturnType
   ? ReturnType extends PromiseLike<infer ReturnType>
-    ? Remote<T> | (new (...args: RemoteFunctionParameters<Parameters>) => ReturnType | PromiseLike<ReturnType>)
-    : Remote<T>
+    ? ((...args: OldRemoteFunctionParameters<Parameters>) => ReturnType | PromiseLike<ReturnType>) | OldRemote<T>
+    : OldRemote<T>
   : never;
 
-/**
- * Is mapping the function Return Type from the Remote to how the types are represented locally.
- *
- * @public
- */
-type RemoteReturnType<T> = [T] extends [never] ? Remote<T> : T extends PromiseLike<infer T> ? RemoteReturnType<T> : T extends Primitives ? RemotePrimitiveReadonly<T> : T extends Remote<infer Local> ? PromiseLike<Local> : Remote<T>;
+/** Helper to convert Constructor Parameters Properly. */
+type OldLocalConstructor<T extends new (...args: any[]) => any> = T extends new (...args: infer Parameters) => infer ReturnType
+  ? ReturnType extends PromiseLike<infer ReturnType>
+    ? OldRemote<T> | (new (...args: OldRemoteFunctionParameters<Parameters>) => ReturnType | PromiseLike<ReturnType>)
+    : OldRemote<T>
+  : never;
 
-/**
- * Is mapping the a writable Primitive Type from the Remote to how the types are represented locally.
- *
- * @public
- */
-type RemotePrimitiveSettable<T extends Primitives> = PromiseLike<T> & {
+/** Is mapping the function Return Type from the Remote to how the types are represented locally. */
+type OldRemoteReturnType<T> = [T] extends [never] ? OldRemote<T> : T extends PromiseLike<infer T> ? OldRemoteReturnType<T> : T extends Primitives ? OldRemotePrimitiveReadonly<T> : T extends OldRemote<infer Local> ? PromiseLike<Local> : OldRemote<T>;
+
+/** Is mapping the a writable Primitive Type from the Remote to how the types are represented locally. */
+type OldRemotePrimitiveSettable<T extends Primitives> = PromiseLike<T> & {
   set(value: T): PromiseLike<void>;
 };
 
-/**
- * Is mapping the a readonly Primitive Type from the Remote to how the types are represented locally.
- *
- * @public
- */
-type RemotePrimitiveReadonly<T extends Primitives> = PromiseLike<T>;
-
-/**
- * The list of primitive Types.
- *
- * @public
- */
-type Primitives = string | number | boolean | null | undefined | void | bigint | symbol;
+/** Is mapping the a readonly Primitive Type from the Remote to how the types are represented locally. */
+type OldRemotePrimitiveReadonly<T extends Primitives> = PromiseLike<T>;
