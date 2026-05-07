@@ -13,7 +13,13 @@ type Primitives = string | number | boolean | null | undefined | void | bigint |
 
 type Remote<T> = RemoteReadonly<T> & RemoteSet<T>;
 
-type RemoteReadonly<T> = RemoteGet<T> & NeverToUnknown<RemoteCall<T>>;
+type RemoteReadonly<T> = RemoteMarker & RemoteGet<T> & NeverToUnknown<RemoteCall<T>>;
+
+export const REMOTE_MARKER = Symbol("RemoteObject");
+
+export type RemoteMarker = {
+  [REMOTE_MARKER]: true;
+};
 
 type IfEqual<X, Y, A = X, B = never> = (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y ? 1 : 2 ? A : B;
 
@@ -23,16 +29,16 @@ export type RemoteObject<T extends RemoteAble> = {
   [K in keyof T as K]-?: IfReadonly<T, K, Remote<T[K]>, RemoteReadonly<T[K]>>;
 };
 
-type RemoteGet<T> = T extends Primitives ? PromiseLike<T> : unknown;
+type RemoteGet<T> = T extends Primitives ? PromiseLike<T> : PromiseLike<unknown>;
 
-type GetRemoteSetAble<T> = T extends Primitives ? T : unknown;
+type GetRemoteSetAble<T> = unknown extends T ? unknown : T extends Primitives ? T : T extends (...args: infer P) => PromiseLike<infer R> ? (...args: P) => R | PromiseLike<R> : RemoteReadonly<T>;
 
 /** Helper for Values which can be set on the Remote. */
 type RemoteSet<T> = {
   [SET]: (value: GetRemoteSetAble<T>) => PromiseLike<void>;
 };
 
-type RemoteCall<T> = T extends (...args: infer P) => infer R ? (...args: { [K in keyof P]: P[K] }) => PromiseLike<R> : never;
+type RemoteCall<T> = T extends (...args: infer P) => infer R ? (...args: P) => PromiseLike<R> : never;
 
 type NeverToUnknown<T> = [T] extends [never] ? unknown : T;
 
@@ -61,7 +67,7 @@ type OldRemoteObj<T extends {}> = {
 };
 
 /** Is mapping the RemoteAble from the Remote to how the types are represented locally. */
-type OldRemoteObject<T extends RemoteAble> = T extends RemoteAbleConstructor ? OldRemoteConstructorPromise<T> : T extends RemoteAbleFunction ? OldRemoteFunctionPromise<T> : T extends RemoteAbleObject ? RemoteObj<T> : never;
+type OldRemoteObject<T extends RemoteAble> = T extends RemoteAbleConstructor ? OldRemoteConstructorPromise<T> : T extends RemoteAbleFunction ? OldRemoteFunctionPromise<T> : T extends RemoteAbleObject ? OldRemoteObj<T> : never;
 
 /** Makes it possible to await an object. */
 type OldRemoteObjPromise<T extends {}> = (OldRemoteObj<T> & PromiseLike<OldRemoteObj<T>>) | OldRemoteObj<T>;
