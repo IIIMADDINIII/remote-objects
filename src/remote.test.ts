@@ -16,15 +16,15 @@ describe("Remote<T>", () => {
 
   test("remote able objects", async () => {
     // Working
-    await R({});
-    await R(() => {});
-    await R(class T {});
+    R({});
+    R(() => {});
+    R(class T {});
     // Failing
-    await expect(async () => await R(10)).rejects.toThrow("Only objects and functions can be exposed as remote objects.");
-    await expect(async () => await R("")).rejects.toThrow("Only objects and functions can be exposed as remote objects.");
-    await expect(async () => await R(Symbol())).rejects.toThrow("Only objects and functions can be exposed as remote objects.");
-    await expect(async () => await R(undefined)).rejects.toThrow("Only objects and functions can be exposed as remote objects.");
-    await expect(async () => await R(true)).rejects.toThrow("Only objects and functions can be exposed as remote objects.");
+    await expect(async () => R(10)).rejects.toThrow("Only objects and functions can be exposed as remote objects.");
+    await expect(async () => R("")).rejects.toThrow("Only objects and functions can be exposed as remote objects.");
+    await expect(async () => R(Symbol())).rejects.toThrow("Only objects and functions can be exposed as remote objects.");
+    await expect(async () => R(undefined)).rejects.toThrow("Only objects and functions can be exposed as remote objects.");
+    await expect(async () => R(true)).rejects.toThrow("Only objects and functions can be exposed as remote objects.");
   });
   test("get primitive Values", async () => {
     const r = R(
@@ -208,6 +208,11 @@ describe("Remote<T>", () => {
       e: () => void = () => {
         test++;
       };
+      f: (value: number) => Promise<string> = async () => "";
+      g: (value: number) => Promise<string> = async (value) => {
+        test += value;
+        return value.toString();
+      };
     })();
     const r = R(i);
     // Working
@@ -247,6 +252,9 @@ describe("Remote<T>", () => {
     await r.d[SET](r.e);
     (await r.d()) satisfies void;
     expect(test).toBe(7);
+    await r.f[SET](r.g);
+    expect((await r.f(1)) satisfies string).toBe("1");
+    expect(test).toBe(8);
     // Working but types should fail
     test = 0;
     // @ts-expect-error
