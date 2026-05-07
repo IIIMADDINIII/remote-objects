@@ -31,7 +31,9 @@ export type RemoteObject<T extends RemoteAble> = {
 
 type RemoteGet<T> = T extends Primitives ? PromiseLike<T> : PromiseLike<unknown>;
 
-type GetRemoteSetAble<T> = unknown extends T ? unknown : T extends Primitives ? T : T extends (...args: infer P) => PromiseLike<infer R> ? (...args: P) => R | PromiseLike<R> : RemoteReadonly<T>;
+type SetAbleWithRemote<T> = T extends (...args: infer P) => PromiseLike<infer R> ? (...args: P) => R | PromiseLike<R> : never;
+
+type GetRemoteSetAble<T> = unknown extends T ? unknown : T extends Primitives ? T : SetAbleWithRemote<T> | RemoteReadonly<T>;
 
 /** Helper for Values which can be set on the Remote. */
 type RemoteSet<T> = {
