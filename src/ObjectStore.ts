@@ -1,5 +1,5 @@
 import type { RequestHandlerInterface, Transferable } from "./Interfaces.js";
-import { SET, type RemoteAble, type RemoteObject } from "./remote.js";
+import { REMOTE_MARKER, SET, type RemoteAble, type RemoteMarker, type RemoteObject } from "./remote.js";
 import type {
   ErrorDescription,
   FunctionDescription,
@@ -38,7 +38,6 @@ import type {
  * The prototype of RemoteObjects is always null amd only ownKeys are represented.
  *
  * @default "full"
- * @public
  */
 export type RemoteObjectPrototype = "none" | "keysOnly" | "full";
 
@@ -54,15 +53,10 @@ export type RemoteObjectPrototype = "none" | "keysOnly" | "full";
  * Directly throws with the RemoteObject. Await needs to be used to access message and other properties. Dosen't capture local stacktrace.
  *
  * @default "newError"
- * @public
  */
 export type RemoteError = "remoteObject" | "newError";
 
-/**
- * Options for creating a remote Object Store.
- *
- * @public
- */
+/** Options for creating a remote Object Store. */
 export interface ObjectStoreOptions {
   /**
    * How to represent the prototype of RemoteObjects.
@@ -202,11 +196,7 @@ export type MayHaveSymbol<T> = {
 // ##     ## ##     ##  ##  ##   ###    ##    ## ##       ##     ## ##    ## ##    ##
 // ##     ## ##     ## #### ##    ##     ######  ######## ##     ##  ######   ######
 
-/**
- * Class to handle object Caching and Translation of ObjectDescriptions to RemoteObjects.
- *
- * @public
- */
+/** Class to handle object Caching and Translation of ObjectDescriptions to RemoteObjects. */
 export class ObjectStore {
   /** The interface to the RequestHandler Instance. */
   #requestHandler: RequestHandlerInterface;
@@ -307,7 +297,6 @@ export class ObjectStore {
    *
    * @param id - A string with wich the remote can request this object.
    * @param object - Object or function to share with remote.
-   * @public
    */
   exposeRemoteObject(id: string, value: RemoteAble): void {
     this.#checkClosed();
@@ -334,7 +323,6 @@ export class ObjectStore {
    *
    * @param id - Id of the object or function to request.
    * @returns A Promise resolving to a Proxy wich represents this object.
-   * @public
    */
   async requestRemoteObject<const T extends RemoteAble>(id: string): Promise<RemoteObject<T>> {
     this.#checkClosed();
@@ -349,7 +337,6 @@ export class ObjectStore {
    *
    * @param id - Id of the object or function to request.
    * @returns A Proxy wich represents this object.
-   * @public
    */
   getRemoteObject<const T extends RemoteAble>(id: string): RemoteObject<T> {
     this.#checkClosed();
@@ -361,7 +348,6 @@ export class ObjectStore {
    * This will call the newMessageHandler on the RequestHandler if defined.
    *
    * @param data - The data wich was received from remote.
-   * @public
    */
   newMessage(data: Transferable): void {
     if (!this.#requestHandler.newMessageHandler) {
@@ -1246,7 +1232,7 @@ export class ObjectStore {
             return undefined;
           case this.#symbolProxyData:
             return parent;
-          case isProxySymbol:
+          case REMOTE_MARKER:
             return true;
         }
         return this.#createRemoteProxy({ type: "get", name, parent });
@@ -1331,27 +1317,22 @@ export class ObjectStore {
   }
 }
 
-/** Symbol for marking RemoteObjects and Proxies for identifying them. */
-const isProxySymbol: unique symbol = Symbol();
-
 /**
  * Returns true if it is given a RemoteObject Proxy.
  *
  * @param object - Any Value to test if it represents a proxy.
  * @returns Boolean indicating if object is a RemoteObject Proxy.
- * @public
  */
 export function isProxy(object: unknown): boolean {
   if (typeof object !== "function" && typeof object !== "object") return false;
   if (object === null) return false;
-  return !!(object as MayHaveSymbol<boolean>)[isProxySymbol];
+  return !!(object as Partial<RemoteMarker>)[REMOTE_MARKER];
 }
 
 /**
  * Creates a unique array of Keys of the Object and its Prototype chain.
  *
  * @param object - Object to list all the keys of (also of Prototype chain).
- * @returns An array of keys.
  */
 function getAllKeys(object: {}): (string | symbol)[] {
   const ret: Set<string | symbol> = new Set();
@@ -1370,7 +1351,6 @@ function getAllKeys(object: {}): (string | symbol)[] {
  *
  * @param description - Description of the Error to be created.
  * @param cause - RemoteObject of the remote Error.
- * @returns An Error Object.
  */
 function createError(description: ErrorDescription, cause: unknown): unknown {
   if (!isProxy(cause)) {
