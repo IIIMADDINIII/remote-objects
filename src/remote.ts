@@ -11,9 +11,9 @@ export const SET = Symbol("set");
 /** The list of primitive Types. */
 type Primitives = string | number | boolean | null | undefined | void | bigint | symbol;
 
-type Remote<T> = RemoteReadonly<T> & RemoteSet<T>;
+export type Remote<T> = RemoteReadonly<T> & RemoteSet<T>;
 
-type RemoteReadonly<T> = RemoteMarker & RemoteGet<T> & NeverToUnknown<RemoteCall<T>>;
+export type RemoteReadonly<T> = RemoteMarker & RemoteGet<T> & NeverToUnknown<RemoteCall<T>>;
 
 export const REMOTE_MARKER = Symbol("RemoteObject");
 
@@ -31,7 +31,7 @@ export type RemoteObject<T extends RemoteAble> = {
 
 type RemoteGet<T> = T extends Primitives ? PromiseLike<T> : PromiseLike<unknown>;
 
-type SetAbleWithRemote<T> = T extends (...args: infer P) => PromiseLike<infer R> ? (...args: P) => R | PromiseLike<R> : never;
+type SetAbleWithRemote<T> = T extends (...args: infer P) => PromiseLike<infer R> ? (...args: { [K in keyof P]: GetRemoteSetAble<P[K]> }) => R | PromiseLike<R> : never;
 
 type GetRemoteSetAble<T> = unknown extends T ? unknown : T extends Primitives ? T : SetAbleWithRemote<T> | RemoteReadonly<T>;
 
@@ -40,7 +40,7 @@ type RemoteSet<T> = {
   [SET]: (value: GetRemoteSetAble<T>) => PromiseLike<void>;
 };
 
-type RemoteCall<T> = T extends (...args: infer P) => infer R ? (...args: P) => PromiseLike<R> : never;
+type RemoteCall<T> = T extends (...args: infer P) => infer R ? (...args: { [K in keyof P]: GetRemoteSetAble<P[K]> }) => PromiseLike<R> : never;
 
 type NeverToUnknown<T> = [T] extends [never] ? unknown : T;
 
