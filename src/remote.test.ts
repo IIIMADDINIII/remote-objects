@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { ObjectStore, SET, type RemoteAble, type RemoteObject } from "./index.js";
+import { ObjectStore, SET, type RemoteAble, type RemoteObject, type RemoteReadonly } from "./index.js";
 
 describe("Remote<T>", () => {
   function R<T extends RemoteAble>(api: T): RemoteObject<T> {
@@ -413,5 +413,27 @@ describe("Remote<T>", () => {
     // @ts-expect-error
     await expect((async () => await r.i("test"))()).resolves.toBe("test");
     expect(i.iv).toBe("test");
+  });
+  test("calling functions with function values", async () => {
+    const i = new (class Test {
+      async a(value: () => Promise<number>): Promise<number> {
+        return await value();
+      }
+      async b(value: (param: number) => Promise<number>): Promise<number> {
+        return await value(2);
+      }
+      async c(value: RemoteReadonly<() => void>): Promise<RemoteReadonly<() => void>> {
+        return value;
+      }
+    })();
+    const r = R(i);
+    // working
+    expect((await r.a(async () => 2)) satisfies number).toBe(2);
+    expect((await r.a(() => 2)) satisfies number).toBe(2);
+    expect((await r.b(async (v) => v)) satisfies number).toBe(2);
+    expect((await r.b((v) => v)) satisfies number).toBe(2);
+    const afn = async () => {};
+    expect((await r.c(afn)) satisfies () => Promise<void>).toBe(2);
+    const fn = () => {};
   });
 });
