@@ -1326,7 +1326,7 @@ export class ObjectStore {
 export function isProxy(object: unknown): boolean {
   if (typeof object !== "function" && typeof object !== "object") return false;
   if (object === null) return false;
-  return !!(object as Partial<RemoteMarker>)[REMOTE_MARKER];
+  return !!(object as Partial<RemoteMarker<boolean>>)[REMOTE_MARKER];
 }
 
 /**

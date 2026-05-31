@@ -433,7 +433,6 @@ describe("Remote<T>", () => {
     expect((await r.b(async (v) => v)) satisfies number).toBe(2);
     expect((await r.b((v) => v)) satisfies number).toBe(2);
     const afn = async () => {};
-    expect((await r.c(afn)) satisfies () => Promise<void>).toBe(2);
-    const fn = () => {};
+    expect((await r.c(afn)) satisfies () => void).toBe(afn);
   });
 });
