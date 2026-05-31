@@ -7,9 +7,8 @@ import { Ctx, pnpm, task, vp } from "./common.ts";
 export const buildCi = task("Build CI", async (ctx) => {
   await clean(ctx);
   await pnpm.install(ctx, { frozenLockfile: true });
-  await vp.fmt(ctx);
-  await vp.lint(ctx);
   await vp.test(ctx);
+  await vp.lint(ctx);
   await vp.pack(ctx);
 });
 

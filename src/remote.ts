@@ -29,7 +29,7 @@ export type RemoteObject<T extends RemoteAble> = {
   [K in keyof T as K]-?: IfReadonly<T, K, RemoteReadonly<T[K]>, Remote<T[K]>>;
 };
 
-type RemoteGet<T, U extends Awaited<T> = Awaited<T>> = U extends RemoteMarker<infer V> ? PromiseLike<V> : U extends Primitives ? PromiseLike<U> : PromiseLike<unknown>;
+type RemoteGet<T, U extends Awaited<T> = Awaited<T>> = [U] extends [never] ? PromiseLike<never> : U extends RemoteMarker<infer V> ? PromiseLike<V> : U extends Primitives ? PromiseLike<U> : PromiseLike<unknown>;
 
 type SetAbleWithRemote<T> = T extends (...args: infer P) => PromiseLike<infer R> ? (...args: { [K in keyof P]: GetRemoteSetAble<P[K]> }) => Awaited<R> | PromiseLike<Awaited<R>> : never;
 

@@ -355,6 +355,11 @@ describe("Remote<T>", () => {
         this.iv = value;
         return value;
       }
+      jv: number = 0;
+      j(n: number): never {
+        this.jv = n;
+        throw new Error("test " + n);
+      }
     })();
     const r = R(i);
     const testSymbol = Symbol();
@@ -385,6 +390,8 @@ describe("Remote<T>", () => {
     expect(i.hv).toBe(false);
     await expect((async () => (await r.i(1)) satisfies number)()).resolves.toBe(1);
     expect(i.iv).toBe(1);
+    await expect((async () => (await r.j(1)) satisfies never)()).rejects.toThrow("test 1");
+    expect(i.jv).toBe(1);
     // Working but types should fail
     // @ts-expect-error
     await expect((async () => await r.a("test"))()).resolves.toBe("test");

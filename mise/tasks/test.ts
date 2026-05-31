@@ -6,6 +6,7 @@ import { Ctx, pnpm, task, vp } from "./common.ts";
 export const test = task("Run tests", async (ctx) => {
   await pnpm.install(ctx);
   await vp.test(ctx);
+  await vp.lint(ctx);
 });
 
 if (import.meta.main) {
