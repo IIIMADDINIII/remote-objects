@@ -1,9 +1,9 @@
 import { describe, expect, test } from "vitest";
 
-import { ObjectStore, SET, type RemoteAble, type RemoteObject, type RemoteReadonly } from "./index.js";
+import { ObjectStore, SET, type RemoteAble, type RemoteReadonly } from "./index.js";
 
 describe("Remote<T>", () => {
-  function R<T extends RemoteAble>(api: T): RemoteObject<T> {
+  function R<T extends RemoteAble>(api: T): RemoteReadonly<T> {
     const a: ObjectStore = new ObjectStore({
       request: (data) => b.requestHandler(data),
     });
@@ -20,10 +20,15 @@ describe("Remote<T>", () => {
     R(() => {});
     R(class T {});
     // Failing
+    // @ts-expect-error
     await expect(async () => R(10)).rejects.toThrow("Only objects and functions can be exposed as remote objects.");
+    // @ts-expect-error
     await expect(async () => R("")).rejects.toThrow("Only objects and functions can be exposed as remote objects.");
+    // @ts-expect-error
     await expect(async () => R(Symbol())).rejects.toThrow("Only objects and functions can be exposed as remote objects.");
+    // @ts-expect-error
     await expect(async () => R(undefined)).rejects.toThrow("Only objects and functions can be exposed as remote objects.");
+    // @ts-expect-error
     await expect(async () => R(true)).rejects.toThrow("Only objects and functions can be exposed as remote objects.");
   });
   test("get primitive Values", async () => {
@@ -74,6 +79,26 @@ describe("Remote<T>", () => {
     // reading a value with no getter defined yields undefined
     // type is number because typescript does not recognize a setter without a getter
     await expect((async () => (await r.o) satisfies number)()).resolves.toBe(undefined);
+  });
+  test("get functions", async () => {
+    const i = new (class Test {
+      a: () => Promise<void> = async () => {};
+      b: (value: number) => Promise<number> = async (v) => v * 2;
+      c: () => Promise<number> = async () => 1;
+      d: () => void = () => {};
+      e: () => void = () => {
+        test++;
+      };
+      f: (value: number) => Promise<string> = async () => "";
+      g: (value: number) => Promise<string> = async (value) => {
+        test += value;
+        return value.toString();
+      };
+    })();
+    const r = R(i);
+    let test = 0;
+    const a = (await r.a) satisfies () => Promise<void>;
+    expect(await a()).toBe(undefined);
   });
   test("set primitive Values", async () => {
     const i = new (class Test {
@@ -432,6 +457,12 @@ describe("Remote<T>", () => {
       async c(value: RemoteReadonly<() => void>): Promise<RemoteReadonly<() => void>> {
         return value;
       }
+      async d(value: RemoteReadonly<(param: number) => number>): Promise<number> {
+        return await value(2);
+      }
+      async e(value: number): Promise<() => Promise<number>> {
+        return async () => value;
+      }
     })();
     const r = R(i);
     // working
@@ -439,7 +470,13 @@ describe("Remote<T>", () => {
     expect((await r.a(() => 2)) satisfies number).toBe(2);
     expect((await r.b(async (v) => v)) satisfies number).toBe(2);
     expect((await r.b((v) => v)) satisfies number).toBe(2);
-    const afn = async () => {};
-    expect((await r.c(afn)) satisfies () => void).toBe(afn);
+    const cafn = async () => {};
+    expect((await r.c(cafn)) satisfies () => void).toBe(cafn);
+    const cfn = () => {};
+    expect((await r.c(cfn)) satisfies () => void).toBe(cfn);
+    const dfn = (v: number) => v * 2;
+    expect((await r.d(dfn)) satisfies number).toBe(4);
+    const efn = await r.e(2);
+    expect((await efn()) satisfies number).toBe(2);
   });
 });

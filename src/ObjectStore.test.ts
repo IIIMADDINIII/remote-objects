@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from "vitest";
 
 import type { RequestHandlerFunction } from "./Interfaces.js";
 import { isProxy, ObjectStore, type MayHaveSymbol, type ObjectStoreOptions } from "./ObjectStore.js";
-import { SET, type Remote } from "./remote.js";
+import { SET, type Remote, type RemoteReadonly } from "./remote.js";
 
 // Seclarations for the Garbage Collector Node api.
 declare global {
@@ -296,6 +296,7 @@ describe("ObjectStore", () => {
       const [remote, local] = getObjectStorePair();
       remote.exposeRemoteObject("test", api);
       const a = await local.requestRemoteObject<typeof api>("test");
+      // @ts-expect-error
       expect(() => delete a.a).toThrow("'deleteProperty' on proxy: trap returned falsish for property 'a'");
       local.close();
     });
@@ -726,7 +727,7 @@ describe("ObjectStore", () => {
       });
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      let o: Remote<Test1234> | undefined = await a.test();
+      let o: RemoteReadonly<Test1234> | undefined = await a.test();
       await doGc();
       expect(weakRef?.deref()).not.toEqual(undefined);
       use(o);
@@ -822,7 +823,7 @@ describe("ObjectStore", () => {
       });
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      let o: Remote<Test1234> | undefined = await a.test();
+      let o: RemoteReadonly<Test1234> | undefined = await a.test();
       await doGc();
       expect(weakRef?.deref()).not.toEqual(undefined);
       use(o);
@@ -967,7 +968,7 @@ describe("ObjectStore", () => {
       );
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      let b: Remote<Test1234> | undefined = await a.test();
+      let b: RemoteReadonly<Test1234> | undefined = await a.test();
       expect(weakRef?.deref()).not.toEqual(undefined);
       await doGc();
       expect(weakRef?.deref()).toEqual(undefined);
@@ -1008,7 +1009,7 @@ describe("ObjectStore", () => {
       );
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      let b: Remote<Test1234> = await a.test();
+      let b = await a.test();
       expect(weakRef?.deref()).not.toEqual(undefined);
       await doGc();
       expect(weakRef?.deref()).toEqual(undefined);

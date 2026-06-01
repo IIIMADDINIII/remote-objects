@@ -1,5 +1,5 @@
 import type { RequestHandlerInterface, Transferable } from "./Interfaces.js";
-import { REMOTE_MARKER, SET, type RemoteAble, type RemoteMarker, type RemoteObject } from "./remote.js";
+import { REMOTE_MARKER, SET, type RemoteAble, type RemoteMarker, type RemoteReadonly } from "./remote.js";
 import type {
   ErrorDescription,
   FunctionDescription,
@@ -324,9 +324,9 @@ export class ObjectStore {
    * @param id - Id of the object or function to request.
    * @returns A Promise resolving to a Proxy wich represents this object.
    */
-  async requestRemoteObject<const T extends RemoteAble>(id: string): Promise<RemoteObject<T>> {
+  async requestRemoteObject<const T extends RemoteAble>(id: string): Promise<RemoteReadonly<T>> {
     this.#checkClosed();
-    return <RemoteObject<T>>await this.#requestValue({ type: "root", id });
+    return <RemoteReadonly<T>>await this.#requestValue({ type: "root", id });
   }
 
   /**
@@ -338,9 +338,9 @@ export class ObjectStore {
    * @param id - Id of the object or function to request.
    * @returns A Proxy wich represents this object.
    */
-  getRemoteObject<const T extends RemoteAble>(id: string): RemoteObject<T> {
+  getRemoteObject<const T extends RemoteAble>(id: string): RemoteReadonly<T> {
     this.#checkClosed();
-    return <RemoteObject<T>>this.#createRemoteProxy({ type: "root", id });
+    return <RemoteReadonly<T>>this.#createRemoteProxy({ type: "root", id });
   }
 
   /**
