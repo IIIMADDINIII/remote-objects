@@ -13,7 +13,11 @@ type Primitives = string | number | boolean | null | undefined | void | bigint |
 
 export type Remote<T> = RemoteReadonly<T> & RemoteSet<T>;
 
-export type RemoteReadonly<T> = RemoteMarker<T> & RemoteGet<Awaited<T>> & NeverToUnknown<RemoteCall<T>> & NeverToUnknown<RemoteObject<T>>;
+export type RemoteAwaited<T> = RemoteCommon<T> & RemoteGet<Awaited<T>, unknown>;
+
+export type RemoteReadonly<T> = RemoteCommon<T> & RemoteGet<Awaited<T>, PromiseLike<RemoteAwaited<T>>>;
+
+type RemoteCommon<T> = RemoteMarker<T> & NeverToUnknown<RemoteCall<T>> & NeverToUnknown<RemoteObject<T>>;
 
 export const REMOTE_MARKER = Symbol("RemoteObject");
 
@@ -25,7 +29,7 @@ type IfEqual<X, Y, A = X, B = never> = (<T>() => T extends X ? 1 : 2) extends <T
 
 type IfReadonly<T, K extends keyof T, Readonly, Writable> = IfEqual<{ [Q in K]: T[K] }, { -readonly [Q in K]: T[K] }, Writable, Readonly>;
 
-type RemoteGet<T> = [T] extends [never] ? PromiseLike<never> : T extends RemoteMarker<infer V> ? PromiseLike<V> : T extends Primitives ? PromiseLike<T> : unknown;
+type RemoteGet<T, D> = [T] extends [never] ? PromiseLike<never> : T extends RemoteMarker<infer V> ? PromiseLike<V> : T extends Primitives ? PromiseLike<T> : D;
 
 type SetAbleWithRemote<T> = T extends (...args: infer P) => PromiseLike<infer R> ? (...args: { [K in keyof P]: GetRemoteSetAble<P[K]> }) => Awaited<R> | PromiseLike<Awaited<R>> : never;
 
@@ -58,3 +62,5 @@ type Awaited<T> =
         ? Awaited<V> // recursively unwrap the value
         : never // the argument to `then` was not callable
       : T; // non-object or non-thenable
+
+type T = RemoteCall<() => Promise<void>>;

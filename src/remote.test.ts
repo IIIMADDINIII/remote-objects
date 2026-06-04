@@ -79,6 +79,27 @@ describe("Remote<T>", () => {
     // reading a value with no getter defined yields undefined
     // type is number because typescript does not recognize a setter without a getter
     await expect((async () => (await r.o) satisfies number)()).resolves.toBe(undefined);
+    // working but types should fail
+    // @ts-expect-error
+    await expect((async () => (await r.i) satisfies string | boolean)()).resolves.toBe(1);
+    // @ts-expect-error
+    await expect((async () => (await r.i) satisfies number | boolean)()).resolves.toBe(1);
+    // @ts-expect-error
+    await expect((async () => (await r.i) satisfies number | string)()).resolves.toBe(1);
+    // @ts-expect-error
+    await expect((async () => (await r.j) satisfies undefined | null)()).resolves.toBe(1);
+    // @ts-expect-error
+    await expect((async () => (await r.j) satisfies number | null)()).resolves.toBe(1);
+    // @ts-expect-error
+    await expect((async () => (await r.j) satisfies number | undefined)()).resolves.toBe(1);
+    // @ts-expect-error
+    await expect((async () => (await r.k) satisfies bigint)()).resolves.toBe(1n);
+    // @ts-expect-error
+    await expect((async () => (await r.k) satisfies number)()).resolves.toBe(1n);
+    // @ts-expect-error
+    await expect((async () => (await r.l) satisfies symbol)()).resolves.toBe(undefined);
+    // @ts-expect-error
+    await expect((async () => (await r.l) satisfies undefined)()).resolves.toBe(undefined);
   });
   test("get functions", async () => {
     const i = new (class Test {
@@ -97,7 +118,7 @@ describe("Remote<T>", () => {
     })();
     const r = R(i);
     let test = 0;
-    const a = (await r.a) satisfies () => Promise<void>;
+    const a = (await r.a) satisfies () => PromiseLike<void>;
     expect(await a()).toBe(undefined);
   });
   test("set primitive Values", async () => {
