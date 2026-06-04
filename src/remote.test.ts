@@ -119,7 +119,20 @@ describe("Remote<T>", () => {
     const r = R(i);
     let test = 0;
     const a = (await r.a) satisfies () => PromiseLike<void>;
-    expect(await a()).toBe(undefined);
+    expect((await a()) satisfies void).toBe(undefined);
+    const b = (await r.b) satisfies (value: number) => PromiseLike<number>;
+    expect((await b(2)) satisfies number).toBe(4);
+    const c = (await r.c) satisfies () => PromiseLike<number>;
+    expect((await c()) satisfies number).toBe(1);
+    const d = (await r.d) satisfies () => PromiseLike<void>;
+    expect((await d()) satisfies void).toBe(undefined);
+    const e = (await r.e) satisfies () => PromiseLike<void>;
+    expect((await e()) satisfies void).toBe(undefined);
+    expect(test).toBe(1);
+    const f = (await r.f) satisfies (value: number) => PromiseLike<string>;
+    expect((await f(2)) satisfies string).toBe("");
+    const g = (await r.g) satisfies (value: number) => PromiseLike<string>;
+    expect((await g(2)) satisfies string).toBe("2");
   });
   test("set primitive Values", async () => {
     const i = new (class Test {

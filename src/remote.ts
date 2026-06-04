@@ -62,5 +62,3 @@ type Awaited<T> =
         ? Awaited<V> // recursively unwrap the value
         : never // the argument to `then` was not callable
       : T; // non-object or non-thenable
-
-type T = RemoteCall<() => Promise<void>>;
