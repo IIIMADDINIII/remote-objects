@@ -118,6 +118,7 @@ describe("Remote<T>", () => {
     })();
     const r = R(i);
     let test = 0;
+    // Working
     const a = (await r.a) satisfies () => PromiseLike<void>;
     expect((await a()) satisfies void).toBe(undefined);
     const b = (await r.b) satisfies (value: number) => PromiseLike<number>;
@@ -504,13 +505,42 @@ describe("Remote<T>", () => {
     expect((await r.a(() => 2)) satisfies number).toBe(2);
     expect((await r.b(async (v) => v)) satisfies number).toBe(2);
     expect((await r.b((v) => v)) satisfies number).toBe(2);
+    expect((await r.b(async () => 3)) satisfies number).toBe(3);
+    expect((await r.b(() => 3)) satisfies number).toBe(3);
     const cafn = async () => {};
     expect((await r.c(cafn)) satisfies () => void).toBe(cafn);
     const cfn = () => {};
     expect((await r.c(cfn)) satisfies () => void).toBe(cfn);
+    const cafnr = async () => "test";
+    expect((await r.c(cafnr)) satisfies () => void).toBe(cafnr);
+    const cfnr = () => "test";
+    expect((await r.c(cfnr)) satisfies () => void).toBe(cfnr);
     const dfn = (v: number) => v * 2;
     expect((await r.d(dfn)) satisfies number).toBe(4);
+    const dfnm = () => 4;
+    expect((await r.d(dfnm)) satisfies number).toBe(4);
     const efn = await r.e(2);
     expect((await efn()) satisfies number).toBe(2);
+    // working but types should fail
+    // @ts-expect-error
+    expect((await r.a(async () => "test")) satisfies number).toBe("test");
+    // @ts-expect-error
+    expect((await r.a(() => "test")) satisfies number).toBe("test");
+    // @ts-expect-error
+    expect((await r.a(async (a: string) => 2)) satisfies number).toBe(2);
+    // @ts-expect-error
+    expect((await r.a((a: string) => 2)) satisfies number).toBe(2);
+    const cafnf = async (a: string) => {};
+    // @ts-expect-error
+    expect((await r.c(cafnf)) satisfies () => void).toBe(cafnf);
+    const cfnf = (a: string) => {};
+    // @ts-expect-error
+    expect((await r.c(cfnf)) satisfies () => void).toBe(cfnf);
+    const dfnr = (v: number) => "test";
+    // @ts-expect-error
+    expect((await r.d(dfnr)) satisfies number).toBe("test");
+    const dfnp = (v: string) => 4;
+    // @ts-expect-error
+    expect((await r.d(dfnp)) satisfies number).toBe(4);
   });
 });
