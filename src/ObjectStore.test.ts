@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from "vitest";
 
 import type { RequestHandlerFunction } from "./Interfaces.js";
 import { isProxy, ObjectStore, type MayHaveSymbol, type ObjectStoreOptions } from "./ObjectStore.js";
-import { SET, type Remote, type RemoteReadonly } from "./remote.js";
+import { SET, type Remote, type RemoteAwaited } from "./remote.js";
 
 // Seclarations for the Garbage Collector Node api.
 declare global {
@@ -727,7 +727,7 @@ describe("ObjectStore", () => {
       });
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      let o: RemoteReadonly<Test1234> | undefined = await a.test();
+      let o: RemoteAwaited<Test1234> | undefined = await a.test();
       await doGc();
       expect(weakRef?.deref()).not.toEqual(undefined);
       use(o);
@@ -823,7 +823,7 @@ describe("ObjectStore", () => {
       });
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      let o: RemoteReadonly<Test1234> | undefined = await a.test();
+      let o: RemoteAwaited<Test1234> | undefined = await a.test();
       await doGc();
       expect(weakRef?.deref()).not.toEqual(undefined);
       use(o);
@@ -968,7 +968,7 @@ describe("ObjectStore", () => {
       );
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      let b: RemoteReadonly<Test1234> | undefined = await a.test();
+      let b: RemoteAwaited<Test1234> | undefined = await a.test();
       expect(weakRef?.deref()).not.toEqual(undefined);
       await doGc();
       expect(weakRef?.deref()).toEqual(undefined);
