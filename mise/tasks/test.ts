@@ -1,7 +1,7 @@
-#!/usr/bin/env -S deno run --node-modules-dir=none --no-lock --allow-all
+#!/usr/bin/env -S deno run --allow-all
 //MISE description="Run tests for the project"
 
-import { Ctx, pnpm, task, vp } from "./common.ts";
+import { Ctx, pnpm, task, vp } from "@iiimaddiniii/task-utils";
 
 export const test = task("Run tests", async (ctx) => {
   await pnpm.install(ctx);

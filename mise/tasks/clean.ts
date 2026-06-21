@@ -1,7 +1,7 @@
-#!/usr/bin/env -S deno run --node-modules-dir=none --no-lock --allow-all
+#!/usr/bin/env -S deno run --allow-all
 //MISE description="Clean the project directory"
 
-import { cleanup, Ctx } from "./common.ts";
+import { cleanup, Ctx } from "@iiimaddiniii/task-utils";
 
 export const clean = cleanup.gitIgnored;
 
