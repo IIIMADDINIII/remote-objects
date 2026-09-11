@@ -36,7 +36,10 @@ export type RemoteMarker<T> = {
 };
 
 /** Defining what should happen if a Remote is awaited. */
-type RemoteGet<T, Default> = // T: Type to transform, Default: Type to use if it is not transformable
+type RemoteGet<
+  T,
+  Default,
+> = // T: Type to transform, Default: Type to use if it is not transformable
   [T] extends [never] // if type is never (without Brackets it would distribute over unions, which is not possible with never)
     ? PromiseLike<never> // return a Promise with never
     : T extends RemoteMarker<infer V> // if type is a Remote Type (Detected by using the RemoteMarker)
@@ -49,7 +52,9 @@ type RemoteGet<T, Default> = // T: Type to transform, Default: Type to use if it
  * Convert a Remote type to a local type used for sending
  * values to the Remote (Set, Parameters).
  */
-type GetRemoteSetAble<T> = // T: Type to transform
+type GetRemoteSetAble<
+  T,
+> = // T: Type to transform
   T extends RemoteMarker<infer V> // if type is a Remote Type (Detected by using the RemoteMarker)
     ? V // return the original type (Unwrapped from the RemoteMarker)
     : unknown extends T // if type is unknown
@@ -57,12 +62,12 @@ type GetRemoteSetAble<T> = // T: Type to transform
       : T extends Primitives // if type is a Primitive
         ? T // return the same Primitive type
         : // All types from here include a RemoteReadonly with a Union to support setting a Remote Value
-            | RemoteAwaited<T> // Add RemoteReadonly<T> to support setting a Remote value (instead of a transformed type)
-            | (T extends new (...args: infer P) => PromiseLike<infer R> // if type is a constructor function (needs to return a Promise else it is not possible to send to Remote)
-                ? new (...args: { [K in keyof P]: GetRemoteSetAble<P[K]> }) => Awaited<R> | PromiseLike<Awaited<R>> // Transform constructor parameters and return type
-                : T extends (...args: infer P) => PromiseLike<infer R> // if type is a function (needs to return a Promise else it is not possible to send to Remote)
-                  ? (...args: { [K in keyof P]: GetRemoteSetAble<P[K]> }) => Awaited<R> | PromiseLike<Awaited<R>> // Transform function parameters and return type
-                  : never); // Do not include in to Union if it is not possible to send to remote
+          | RemoteAwaited<T> // Add RemoteReadonly<T> to support setting a Remote value (instead of a transformed type)
+          | (T extends new (...args: infer P) => PromiseLike<infer R> // if type is a constructor function (needs to return a Promise else it is not possible to send to Remote)
+              ? new (...args: { [K in keyof P]: GetRemoteSetAble<P[K]> }) => Awaited<R> | PromiseLike<Awaited<R>> // Transform constructor parameters and return type
+              : T extends (...args: infer P) => PromiseLike<infer R> // if type is a function (needs to return a Promise else it is not possible to send to Remote)
+                ? (...args: { [K in keyof P]: GetRemoteSetAble<P[K]> }) => Awaited<R> | PromiseLike<Awaited<R>> // Transform function parameters and return type
+                : never); // Do not include in to Union if it is not possible to send to remote
 
 /** Defines how to set a value on a Remote type. */
 type RemoteSet<T> = {
@@ -70,7 +75,9 @@ type RemoteSet<T> = {
 };
 
 /** Defines how to call a Remote function. */
-type RemoteCall<T> = // T: Type to transform
+type RemoteCall<
+  T,
+> = // T: Type to transform
   T extends new (...args: infer P) => infer R // if type is a constructor function
     ? new (...args: { [K in keyof P]: GetRemoteSetAble<P[K]> }) => RemoteReadonly<Awaited<R>> // Transform constructor parameters and return type
     : T extends (...args: infer P) => infer R // if type is a function
@@ -78,7 +85,9 @@ type RemoteCall<T> = // T: Type to transform
       : never; // If not a function, remove it from the union
 
 /** Defines how to represent a Remote object. */
-type RemoteObject<T> = // T: Type to transform
+type RemoteObject<
+  T,
+> = // T: Type to transform
   T extends object // if type is an object
     ? {
         [K in keyof T as K]-?: IfReadonly<T, K, RemoteReadonly<T[K]>, Remote<T[K]>>;

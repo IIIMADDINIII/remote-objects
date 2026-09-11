@@ -8,10 +8,14 @@
 
     // Environment Settings
     // See also https://aka.ms/tsconfig/module
+    "moduleDetection": "force",
     "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "allowImportingTsExtensions": true,
+    "esModuleInterop": true,
     "target": "esnext",
-    "types": ["./declarations.d.ts"],
     "lib": ["esnext"],
+    "types": ["./declarations.d.ts"],
 
     // Other Outputs
     "sourceMap": true,
@@ -19,6 +23,8 @@
     "declarationMap": true,
 
     // Stricter Typechecking Options
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
 
@@ -35,7 +41,8 @@
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
     "noUncheckedSideEffectImports": true,
-    "moduleDetection": "force",
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "noEmit": true,
+    "resolveJsonModule": true
   }
 }

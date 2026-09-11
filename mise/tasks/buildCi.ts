@@ -8,6 +8,7 @@ export const buildCi = task("Build CI", async (ctx) => {
   await clean(ctx);
   await pnpm.install(ctx, { frozenLockfile: true });
   await vp.check(ctx);
+  await vp.test(ctx);
   await vp.pack(ctx);
 });
 

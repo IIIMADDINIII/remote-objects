@@ -35,14 +35,12 @@
     "access": "public"
   },
   "dependencies": {
-    "tslib": "^2.6.2"
+    "tslib": "^2.8.1"
   },
   "devDependencies": {
-    "@typescript/native-preview": "7.0.0-dev.20260618.1",
-    "@vitest/coverage-istanbul": "4.1.9",
-    "@vitest/ui": "4.1.9",
+    "@vitest/coverage-v8": "4.1.11",
     "rolldown-plugin-access-privates": "^0.1.4",
-    "typescript": "^6.0.3",
+    "vite": "catalog:",
     "vite-plus": "catalog:"
   }
 }

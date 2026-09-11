@@ -355,25 +355,25 @@ describe("Remote<T>", () => {
     // Working but types should fail
     test = 0;
     // @ts-expect-error
-    await r.a[SET]((_: number) => {
+    await r.a[SET]((_num: number) => {
       test++;
     });
     (await r.a()) satisfies void;
     expect(test).toBe(1);
     // @ts-expect-error
-    await r.a[SET](async (_: number) => {
+    await r.a[SET](async (_num: number) => {
       test++;
     });
     (await r.a()) satisfies void;
     expect(test).toBe(2);
     // @ts-expect-error
-    await r.b[SET]((_: string) => {
+    await r.b[SET]((_str: string) => {
       test++;
     });
     (await r.b(1)) satisfies void;
     expect(test).toBe(3);
     // @ts-expect-error
-    await r.b[SET](async (_: string) => {
+    await r.b[SET](async (_str: string) => {
       test++;
     });
     (await r.b(1)) satisfies void;

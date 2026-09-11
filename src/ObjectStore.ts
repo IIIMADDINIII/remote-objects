@@ -32,11 +32,8 @@ import type {
  * How to represent the prototype of RemoteObjects. -
  * "full": Represent the prototype with an other
  * RemoteObject so instanceof and getPrototypeOf will work.
- * - "keysOnly": Lists all the keys in the prototype chain
- * so "key" in RemoteObject will work but the getPrototypeOf
- * will return null (instanceof does not work). - "none":
- * The prototype of RemoteObjects is always null amd only
- * ownKeys are represented.
+ *
+ * - "keysOnly": Lists all the keys in the prototype chain so "key" in RemoteObject will work but the getPrototypeOf will return null (instanceof does not work). - "none": The prototype of RemoteObjects is always null amd only ownKeys are represented.
  *
  * @default "full"
  */
@@ -961,10 +958,7 @@ export class ObjectStore {
    *   optionally update.
    * @returns Resolved description.
    */
-  async #resolveFunctionDescription(
-    description: FunctionDescription,
-    oldDescription?: ResolvedFunctionDescription,
-  ): Promise<ResolvedFunctionDescription> {
+  async #resolveFunctionDescription(description: FunctionDescription, oldDescription?: ResolvedFunctionDescription): Promise<ResolvedFunctionDescription> {
     const ownKeys = await this.#createOwnKeysMap(description.ownKeys);
     const hasKeys = await Promise.all(description.hasKeys.map((v) => this.#createKeyValue(v)));
     const prototype = (await this.#createValue(description.prototype)) as {} | null;
@@ -1443,8 +1437,7 @@ export class ObjectStore {
    */
   #cleanupObject(id: number): void {
     this.#deletedRemoteIds.add(id);
-    if (this.#options.scheduleGcAfterObjectCount !== 0 && this.#deletedRemoteIds.size >= this.#options.scheduleGcAfterObjectCount)
-      this.#scheduleSyncGcImmediate();
+    if (this.#options.scheduleGcAfterObjectCount !== 0 && this.#deletedRemoteIds.size >= this.#options.scheduleGcAfterObjectCount) this.#scheduleSyncGcImmediate();
     this.#valueFromRemoteNumberId.delete(id);
   }
 

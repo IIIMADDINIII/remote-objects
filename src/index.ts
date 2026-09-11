@@ -37,14 +37,6 @@ export { RequestError, RequestHandler, TimeoutError } from "./RequestHandler.js"
 
 export { isProxy, ObjectStore, type ObjectStoreOptions, type RemoteError, type RemoteObjectPrototype } from "./ObjectStore.js";
 
-export type {
-  DisconnectedHandler,
-  MessageHandlerInterface,
-  NewMessageHandler,
-  RequestHandlerFunction,
-  RequestHandlerInterface,
-  SendMessageFunction,
-  Transferable,
-} from "./Interfaces.js";
+export type { DisconnectedHandler, MessageHandlerInterface, NewMessageHandler, RequestHandlerFunction, RequestHandlerInterface, SendMessageFunction, Transferable } from "./Interfaces.js";
 
 export * from "./remote.js";

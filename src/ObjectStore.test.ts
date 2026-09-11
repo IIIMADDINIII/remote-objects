@@ -68,7 +68,7 @@ describe("ObjectStore", () => {
     await wait(delay);
   }
 
-  function use(_: unknown) {}
+  function use(_var: unknown) {}
 
   describe("constructor", () => {
     test("should call setRequestHandler and ", () => {
@@ -505,9 +505,7 @@ describe("ObjectStore", () => {
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
       await expect(async () => (a as any)[SET]()).rejects.toThrow("Cannot write to a RemoteObject or Return Value. Only properties can be set.");
-      await expect(async () => new (a as any)()[SET]()).rejects.toThrow(
-        "Cannot write to a RemoteObject or Return Value. Only properties can be set.",
-      );
+      await expect(async () => new (a as any)()[SET]()).rejects.toThrow("Cannot write to a RemoteObject or Return Value. Only properties can be set.");
       local.close();
     });
     test("if error has no Stacktrace only remote stack should be Returned", async () => {
@@ -872,7 +870,7 @@ describe("ObjectStore", () => {
         a: number = 10;
       }
       const api = {
-        async test(_: Remote<Test1234>) {
+        async test(_test: Remote<Test1234>) {
           return 10;
         },
       };
@@ -910,7 +908,7 @@ describe("ObjectStore", () => {
         a: number = 10;
       }
       const api = {
-        async test(_: Remote<Test1234>) {
+        async test(_test: Remote<Test1234>) {
           return 10;
         },
       };
@@ -1028,7 +1026,7 @@ describe("ObjectStore", () => {
     test("syncGc should work even if gcSync Request is Delayed", async () => {
       class Test1234 {}
       const api = {
-        async test(_: Remote<Test1234>) {
+        async test(_test: Remote<Test1234>) {
           return 10;
         },
       };
@@ -1070,7 +1068,7 @@ describe("ObjectStore", () => {
     test("do not delete object if it was resend in the meantime", async () => {
       class Test1234 {}
       const api = {
-        async test(_: Remote<Test1234> | undefined) {
+        async test(_test: Remote<Test1234> | undefined) {
           return 10;
         },
       };
@@ -1157,9 +1155,7 @@ describe("ObjectStore", () => {
       const [remote, local] = getObjectStorePair();
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      expect(() => Object.getPrototypeOf(a)).toThrow(
-        "getPrototypeOf is not Supported by RemoteObject Proxy. Await the RemoteObject to be able to query metadata.",
-      );
+      expect(() => Object.getPrototypeOf(a)).toThrow("getPrototypeOf is not Supported by RemoteObject Proxy. Await the RemoteObject to be able to query metadata.");
       local.close();
     });
     test("has should fail", async () => {
@@ -1175,9 +1171,7 @@ describe("ObjectStore", () => {
       const [remote, local] = getObjectStorePair();
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      expect(() => Object.getOwnPropertyNames(a)).toThrow(
-        "ownKeys is not Supported by RemoteObject Proxy. Await the RemoteObject to be able to query metadata.",
-      );
+      expect(() => Object.getOwnPropertyNames(a)).toThrow("ownKeys is not Supported by RemoteObject Proxy. Await the RemoteObject to be able to query metadata.");
       local.close();
     });
     test("getOwnPropertyDescriptor should fail", async () => {
@@ -1185,9 +1179,7 @@ describe("ObjectStore", () => {
       const [remote, local] = getObjectStorePair();
       remote.exposeRemoteObject("test", api);
       const a = local.getRemoteObject<typeof api>("test");
-      expect(() => Object.getOwnPropertyDescriptor(a, "a")).toThrow(
-        "getOwnPropertyDescriptor is not Supported by RemoteObject Proxy. Await the RemoteObject to be able to query metadata.",
-      );
+      expect(() => Object.getOwnPropertyDescriptor(a, "a")).toThrow("getOwnPropertyDescriptor is not Supported by RemoteObject Proxy. Await the RemoteObject to be able to query metadata.");
       local.close();
     });
     test("defineProperty should fail", async () => {
@@ -1304,9 +1296,7 @@ describe("ObjectStore", () => {
       });
       await expect(os.requestHandler("test")).rejects.toThrow("request is not a message from Remote ObjectStore because it is not a object.");
       await expect(os.requestHandler({})).rejects.toThrow("request is not a message from Remote ObjectStore because it has no type field.");
-      await expect(os.requestHandler({ type: "test" })).rejects.toThrow(
-        "request is not a message from Remote ObjectStore because it has a unknown value in the type field.",
-      );
+      await expect(os.requestHandler({ type: "test" })).rejects.toThrow("request is not a message from Remote ObjectStore because it has a unknown value in the type field.");
       os.close();
     });
     test("should error if numbered remote Object is not in gcObjects", async () => {
