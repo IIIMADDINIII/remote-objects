@@ -14,19 +14,19 @@
   },
   "type": "module",
   "main": "./dist/index.cjs",
-  "module": "./dist/index.mjs",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.cts",
   "exports": {
     ".": {
-      "import": "./dist/index.mjs",
+      "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
     "./ObjectStore": {
-      "import": "./dist/ObjectStore.mjs",
+      "import": "./dist/ObjectStore.js",
       "require": "./dist/ObjectStore.cjs"
     },
     "./RequestHandler": {
-      "import": "./dist/RequestHandler.mjs",
+      "import": "./dist/RequestHandler.js",
       "require": "./dist/RequestHandler.cjs"
     },
     "./package.json": "./package.json"
