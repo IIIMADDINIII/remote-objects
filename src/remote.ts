@@ -2,7 +2,7 @@
 export type RemoteAble = object | ((...args: any[]) => any) | (new (...args: any[]) => any);
 
 /** Symbol to set a value on the Remote. */
-export const SET = Symbol("set");
+export const SET: unique symbol = Symbol("set");
 
 /** The list of primitive Types. */
 type Primitives = string | number | boolean | null | undefined | void | bigint | symbol;
@@ -23,7 +23,7 @@ export type RemoteAwaited<T> = RemoteCommon<T> & RemoteGet<Awaited<T>, unknown>;
 type RemoteCommon<T> = RemoteMarker<T> & NeverToUnknown<RemoteCall<T>> & NeverToUnknown<RemoteObject<T>>;
 
 /** Marker symbol to identify Remote types. */
-export const REMOTE_MARKER = Symbol("RemoteObject");
+export const REMOTE_MARKER: unique symbol = Symbol("RemoteObject");
 
 /** Marker type to identify Remote types. */
 export type RemoteMarker<T> = {
